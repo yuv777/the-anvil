@@ -3,7 +3,7 @@
 import { useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Share2 } from 'lucide-react'
+import { Share2, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import BottomNav from '@/app/components/BottomNav'
 import { ACHIEVEMENTS, RARITY_COLORS } from '@/lib/achievements'
@@ -150,9 +150,10 @@ export default function ProfileClient({ username, email, skills, currentStreak, 
           <span>⚒</span>
           <span className="text-xs font-black tracking-[0.15em] uppercase" style={{ color: 'var(--text)' }}>The Anvil</span>
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
           <Link href="/dashboard" className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Dashboard</Link>
           <Link href="/squads" className="text-xs font-medium" style={{ color: 'var(--text-2)' }}>Squads</Link>
+          <Link href="/settings" style={{ color: 'var(--text-2)' }}><Settings size={18} strokeWidth={1.5} /></Link>
         </div>
       </nav>
 
