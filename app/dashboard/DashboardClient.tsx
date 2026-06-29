@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import SwipeableTask from './SwipeableTask'
@@ -8,6 +8,7 @@ import BottomNav from '@/app/components/BottomNav'
 import TaskTimer, { extractSeconds } from '@/app/components/TaskTimer'
 import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
@@ -133,10 +134,12 @@ export default function DashboardClient({
     )
     setTasks(updatedTasks)
     if (newCompleted) {
+      Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
       const isPerfectDay = updatedTasks.filter(t => t.completed).length === totalCount
       // Update streak first so achievement check sees the correct streak value
       let latestStreak = currentStreak
       if (isPerfectDay) {
+        Haptics.notification({ type: NotificationType.Success }).catch(() => {})
         latestStreak = await handlePerfectDay(supabase, updatedTasks)
       }
       await checkAndAwardAchievements(supabase, updatedTasks, latestStreak, overallTier, skillLevels)
