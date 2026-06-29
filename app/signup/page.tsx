@@ -1,5 +1,7 @@
 'use client'
 
+'use client'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -12,6 +14,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -94,9 +97,33 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Consent */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <div className="mt-0.5 shrink-0">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                className="w-5 h-5 rounded-md flex items-center justify-center transition-colors"
+                style={{ background: agreed ? 'var(--green)' : 'var(--surface)', border: `1px solid ${agreed ? 'var(--green)' : 'var(--border-2)'}` }}
+              >
+                {agreed && <span className="text-black text-xs font-bold">✓</span>}
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--text-2)' }}>
+              I am 18 or older and I agree to the{' '}
+              <Link href="/terms" className="underline" style={{ color: 'var(--green)' }}>Terms of Service</Link>
+              {' '}and{' '}
+              <Link href="/privacy" className="underline" style={{ color: 'var(--green)' }}>Privacy Policy</Link>
+            </p>
+          </label>
+
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !agreed}
             className="w-full py-3.5 rounded-xl font-bold text-sm tracking-wide transition-opacity disabled:opacity-40"
             style={{ background: 'var(--green)', color: '#000' }}
           >

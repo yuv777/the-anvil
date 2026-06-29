@@ -839,18 +839,30 @@ export default function SettingsClient({
 
         {/* ── Section 6: Data & Privacy ── */}
         <Section title="Data & Privacy" icon={Shield}>
-          <button
-            onClick={exportData}
-            disabled={loading}
-            className="w-full flex items-center justify-between px-4 py-3.5 text-left disabled:opacity-40"
+          <a
+            href="/api/export-data"
+            download
+            className="w-full flex items-center justify-between px-4 py-3.5 text-left"
             style={{ borderBottom: '1px solid var(--border)' }}
           >
             <div className="flex items-center gap-2.5">
               <Download size={13} style={{ color: 'var(--text-2)' }} />
-              <span className="text-sm" style={{ color: 'var(--text)' }}>Export My Data</span>
+              <span className="text-sm" style={{ color: 'var(--text)' }}>Download My Data</span>
             </div>
             <span className="text-xs" style={{ color: 'var(--text-3)' }}>CSV</span>
-          </button>
+          </a>
+          <Link href="/privacy" className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <span className="text-sm" style={{ color: 'var(--text)' }}>Privacy Policy</span>
+            <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+          </Link>
+          <Link href="/terms" className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <span className="text-sm" style={{ color: 'var(--text)' }}>Terms of Service</span>
+            <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+          </Link>
+          <Link href="/cookies" className="flex items-center justify-between px-4 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
+            <span className="text-sm" style={{ color: 'var(--text)' }}>Cookie Policy</span>
+            <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+          </Link>
           <SettingRow label="Delete Account" onClick={() => openModal('delete')} danger last />
         </Section>
 

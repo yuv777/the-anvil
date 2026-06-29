@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import AlarmManager from "@/app/components/AlarmManager"
+import CookieBanner from "@/app/components/CookieBanner"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-full antialiased">
         <AlarmManager />
+        <CookieBanner />
         {children}
       </body>
     </html>
