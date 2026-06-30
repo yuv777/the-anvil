@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'public',
   server: {
     // Replace with your actual Vercel URL
-    url: 'https://the-anvil.vercel.app',
+    url: 'https://the-anvil-seven.vercel.app',
     cleartext: false,
   },
   plugins: {
