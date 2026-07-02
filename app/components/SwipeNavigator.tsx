@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useLayoutEffect } from 'react'
 import { Home, BarChart2, Users, User, BookOpen, Swords } from 'lucide-react'
 
 const ROUTES = [
@@ -20,45 +20,34 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
   const startY = useRef(0)
   const isHorizontal = useRef(false)
   const busy = useRef(false)
-  const slideDir = useRef(0) // -1 = swiped left, 1 = swiped right
+  const slideDir = useRef(0) // -1 swiped left, 1 swiped right
   const [dragX, setDragX] = useState(0)
   const [ms, setMs] = useState(0)
+  const [animClass, setAnimClass] = useState('')
 
   const currentIndex = ROUTES.findIndex(r => pathname.startsWith(r.href))
   const prevRoute = currentIndex > 0 ? ROUTES[currentIndex - 1] : null
   const nextRoute = currentIndex < ROUTES.length - 1 ? ROUTES[currentIndex + 1] : null
-
-  // Peek panel only shown during active drag (not during incoming slide)
   const isDragging = !busy.current && Math.abs(dragX) > 5
   const peekRoute = isDragging ? (dragX < 0 ? nextRoute : prevRoute) : null
   const peekDir = dragX < 0 ? 1 : -1
 
-  // When pathname changes, navigation is done — slide new content in from opposite side
-  useEffect(() => {
+  // Fires synchronously before the browser paints when pathname changes.
+  // animation-fill-mode:both (the "both" in the CSS class) means the new page
+  // is held at its "from" position (100% or -100% off-screen) from the very
+  // first frame it renders — no flash possible.
+  useLayoutEffect(() => {
     if (!busy.current || slideDir.current === 0) return
-    const W = window.innerWidth
-    // New content arrives from opposite direction to where old content left
-    const incomingFrom = slideDir.current * W // slid left (-1*W=-W)? new comes from right (+W)...
-    // Actually: if dir=-1 (swiped left), old went to -W, new comes from +W
-    // incomingFrom = -slideDir.current * W
-    const from = -slideDir.current * W
-
-    // Instantly place new content off-screen on the opposite side
+    const dir = slideDir.current
+    slideDir.current = 0
+    setDragX(0)
     setMs(0)
-    setDragX(from)
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        // Slide it in to center
-        setMs(240)
-        setDragX(0)
-        setTimeout(() => {
-          busy.current = false
-          slideDir.current = 0
-        }, 240)
-      })
-    })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setAnimClass(dir === -1 ? 'swipe-in-from-right' : 'swipe-in-from-left')
+    const t = setTimeout(() => {
+      setAnimClass('')
+      busy.current = false
+    }, 320)
+    return () => clearTimeout(t)
   }, [pathname])
 
   function onTouchStart(e: React.TouchEvent) {
@@ -72,12 +61,10 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
     if (busy.current) return
     const dx = e.touches[0].clientX - startX.current
     const dy = e.touches[0].clientY - startY.current
-
     if (!isHorizontal.current) {
       if (Math.abs(dy) > Math.abs(dx)) return
       isHorizontal.current = true
     }
-
     const atStart = currentIndex <= 0 && dx > 0
     const atEnd = currentIndex >= ROUTES.length - 1 && dx < 0
     setMs(0)
@@ -105,74 +92,46 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
       return
     }
 
-    const W = window.innerWidth
-    // dir: -1 = swiped left (next page), 1 = swiped right (prev page)
-    const dir = dx < 0 ? -1 : 1
-
     busy.current = true
-    slideDir.current = dir
-    setMs(220)
-    setDragX(dir * W) // slide current page off in swipe direction
-
-    setTimeout(() => {
-      router.push(ROUTES[nextIndex].href)
-      // pathname useEffect will handle sliding the new page in
-    }, 220)
+    slideDir.current = dx < 0 ? -1 : 1
+    // Navigate immediately — useLayoutEffect handles the slide-in
+    router.push(ROUTES[nextIndex].href)
   }
-
-  const easing = `${ms}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`
 
   return (
     <div style={{ height: '100%', width: '100%', overflow: 'hidden', position: 'relative', background: 'var(--bg)' }}>
 
-      {/* Adjacent page peek — only during active drag */}
+      {/* Adjacent page peek during active drag */}
       {peekRoute && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-            background: 'var(--bg)',
-            transform: `translateX(calc(${peekDir * 100}% + ${dragX}px))`,
-            transition: 'none',
-            zIndex: 1,
-          }}
-        >
-          <peekRoute.Icon
-            size={56}
-            strokeWidth={1.5}
-            color={peekRoute.color}
-            style={{ opacity: Math.min(1, Math.abs(dragX) / 80) }}
-          />
-          <span style={{
-            color: peekRoute.color,
-            fontSize: 20,
-            fontWeight: 800,
-            letterSpacing: '0.05em',
-            opacity: Math.min(1, Math.abs(dragX) / 80),
-          }}>
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 1,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+          background: 'var(--bg)',
+          transform: `translateX(calc(${peekDir * 100}% + ${dragX}px))`,
+        }}>
+          <peekRoute.Icon size={56} strokeWidth={1.5} color={peekRoute.color}
+            style={{ opacity: Math.min(1, Math.abs(dragX) / 80) }} />
+          <span style={{ color: peekRoute.color, fontSize: 20, fontWeight: 800, letterSpacing: '0.05em',
+            opacity: Math.min(1, Math.abs(dragX) / 80) }}>
             {peekRoute.label}
           </span>
         </div>
       )}
 
-      {/* Main content */}
+      {/* Main content — inline transform during drag, CSS animation after navigation */}
       <div
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        className={animClass || undefined}
         style={{
-          height: '100%',
-          width: '100%',
-          position: 'relative',
-          zIndex: 2,
-          transform: `translateX(${dragX}px)`,
-          transition: ms > 0 ? `transform ${easing}` : 'none',
+          height: '100%', width: '100%', position: 'relative', zIndex: 2,
           willChange: 'transform',
+          // Remove inline transform when CSS animation is active so fill-mode takes over
+          ...(animClass ? {} : {
+            transform: `translateX(${dragX}px)`,
+            transition: ms > 0 ? `transform ${ms}ms cubic-bezier(0.25,0.46,0.45,0.94)` : 'none',
+          }),
         }}
       >
         {children}
