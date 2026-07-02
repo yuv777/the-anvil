@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase'
 import BottomNav from '@/app/components/BottomNav'
 import {
   User, Lock, Sliders, Bell, Palette, Shield, Info,
-  ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen, Moon,
+  ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen, Moon, QrCode,
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
 
@@ -309,12 +309,14 @@ export default function SettingsClient({
   const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
   const DAY_LABELS: Record<string, string> = { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' }
 
-  interface SleepAlarm { id: string; label: string; alarm_time: string; days: string[]; enabled: boolean }
+  interface SleepAlarm { id: string; label: string; alarm_time: string; days: string[]; enabled: boolean; qr_dismiss: boolean }
   const [alarms, setAlarms]           = useState<SleepAlarm[]>([])
   const [newAlarmLabel, setNewAlarmLabel] = useState('Bedtime')
   const [newAlarmTime, setNewAlarmTime]   = useState('22:30')
   const [newAlarmDays, setNewAlarmDays]   = useState<string[]>(['mon','tue','wed','thu','fri','sat','sun'])
+  const [newAlarmQr, setNewAlarmQr]       = useState(false)
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default')
+  const [qrCodeUrl, setQrCodeUrl]         = useState('')
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -323,6 +325,15 @@ export default function SettingsClient({
     supabase.from('user_sleep_alarms').select('*').eq('user_id', userId).order('alarm_time')
       .then(({ data }) => { if (data) setAlarms(data as SleepAlarm[]) })
   }, [userId, supabase])
+
+  useEffect(() => {
+    import('qrcode').then(QRCode => {
+      QRCode.toDataURL(userId, {
+        width: 220, margin: 2,
+        color: { dark: '#f0f0f0', light: '#0e0e0e' },
+      }).then(url => setQrCodeUrl(url))
+    })
+  }, [userId])
 
   async function requestNotifPermission() {
     if (!('Notification' in window)) { showToast('Notifications not supported in this browser', 'error'); return }
@@ -340,7 +351,7 @@ export default function SettingsClient({
     if (!newAlarmTime || newAlarmDays.length === 0) { showToast('Pick a time and at least 1 day', 'error'); return }
     setLoading(true)
     const { data, error } = await supabase.from('user_sleep_alarms')
-      .insert({ user_id: userId, label: newAlarmLabel.trim() || 'Alarm', alarm_time: newAlarmTime, days: newAlarmDays, enabled: true })
+      .insert({ user_id: userId, label: newAlarmLabel.trim() || 'Alarm', alarm_time: newAlarmTime, days: newAlarmDays, enabled: true, qr_dismiss: newAlarmQr })
       .select().single()
     setLoading(false)
     if (error) { showToast(error.message, 'error'); return }
@@ -741,6 +752,7 @@ export default function SettingsClient({
               </div>
               {/* Toggle + delete */}
               <div className="flex items-center gap-3 shrink-0">
+                {alarm.qr_dismiss && <QrCode size={14} style={{ color: 'var(--text-3)' }} />}
                 <Toggle on={alarm.enabled} onChange={v => toggleAlarm(alarm.id, v)} />
                 <button onClick={() => deleteAlarm(alarm.id)}>
                   <Trash2 size={15} style={{ color: '#f87171' }} />
@@ -749,11 +761,32 @@ export default function SettingsClient({
             </div>
           ))}
 
+          {/* QR code for dismissal */}
+          {qrCodeUrl && (
+            <div className="px-4 py-5" style={{ borderTop: '1px solid var(--border)' }}>
+              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text)' }}>Your wake-up QR code</p>
+              <p className="text-xs mb-4" style={{ color: 'var(--text-3)' }}>
+                Screenshot or print this. Stick it somewhere you must get up to reach — bathroom mirror, kettle, front door.
+              </p>
+              <div className="flex flex-col items-center gap-4">
+                <img src={qrCodeUrl} alt="Wake-up QR code" className="rounded-2xl" style={{ width: 160, height: 160 }} />
+                <a
+                  href={qrCodeUrl}
+                  download="anvil-wakeup-qr.png"
+                  className="text-xs px-4 py-2 rounded-xl font-medium"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text-2)' }}
+                >
+                  Save QR code
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Add alarm */}
           <button
-            onClick={() => { setNewAlarmLabel('Bedtime'); setNewAlarmTime('22:30'); setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun']); openModal('addAlarm') }}
+            onClick={() => { setNewAlarmLabel('Bedtime'); setNewAlarmTime('22:30'); setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun']); setNewAlarmQr(false); openModal('addAlarm') }}
             className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
-            style={{ color: 'var(--green)' }}
+            style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
           >
             <Plus size={16} />
             <span className="text-sm font-medium">Add Alarm</span>
@@ -1137,6 +1170,23 @@ export default function SettingsClient({
                   )
                 })}
               </div>
+            </div>
+
+            {/* QR dismiss toggle */}
+            <div
+              className="flex items-center justify-between px-4 py-3.5 rounded-xl"
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <QrCode size={14} style={{ color: 'var(--text-2)' }} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>Require QR scan to dismiss</span>
+                </div>
+                <p className="text-xs mt-0.5 ml-5" style={{ color: 'var(--text-3)' }}>
+                  Forces you out of bed to scan the code
+                </p>
+              </div>
+              <Toggle on={newAlarmQr} onChange={setNewAlarmQr} />
             </div>
           </div>
 
