@@ -700,8 +700,8 @@ export default function SettingsClient({
 
         {/* ── Section 4b: Sleep Alarms ── */}
         <Section title="Sleep Alarms" icon={Moon}>
-          {/* Notification permission banner */}
-          {notifPermission !== 'granted' && (
+          {/* Notification permission banner — web only, not shown in native iOS app */}
+          {notifPermission !== 'granted' && typeof window !== 'undefined' && !(window as any).Capacitor?.isNativePlatform?.() && (
             <button
               onClick={requestNotifPermission}
               className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
