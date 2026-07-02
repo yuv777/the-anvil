@@ -99,7 +99,7 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
   }
 
   return (
-    <div style={{ height: '100%', width: '100%', overflow: 'hidden', position: 'relative', background: 'var(--bg)' }}>
+    <div style={{ height: '100%', width: '100%', overflowX: 'hidden', overflowY: 'auto', position: 'relative', background: 'var(--bg)' }}>
 
       {/* Adjacent page peek during active drag */}
       {peekRoute && (
