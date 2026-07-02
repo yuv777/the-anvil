@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import AlarmManager from "@/app/components/AlarmManager"
 import CookieBanner from "@/app/components/CookieBanner"
+import SwipeNavigator from "@/app/components/SwipeNavigator"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -34,7 +35,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-full antialiased">
         <AlarmManager />
         <CookieBanner />
-        {children}
+        <SwipeNavigator>
+          {children}
+        </SwipeNavigator>
       </body>
     </html>
   )
