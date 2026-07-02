@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Home, BarChart2, Users, User, BookOpen, Swords } from 'lucide-react'
 
 const ROUTES = [
@@ -20,6 +20,7 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
   const startY = useRef(0)
   const isHorizontal = useRef(false)
   const busy = useRef(false)
+  const slideDir = useRef(0) // -1 = swiped left, 1 = swiped right
   const [dragX, setDragX] = useState(0)
   const [ms, setMs] = useState(0)
 
@@ -27,9 +28,38 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
   const prevRoute = currentIndex > 0 ? ROUTES[currentIndex - 1] : null
   const nextRoute = currentIndex < ROUTES.length - 1 ? ROUTES[currentIndex + 1] : null
 
-  // Which adjacent page is peeking in
-  const peekRoute = dragX < -5 ? nextRoute : dragX > 5 ? prevRoute : null
-  const peekDir = dragX < -5 ? 1 : -1 // 1 = comes from right, -1 = from left
+  // Peek panel only shown during active drag (not during incoming slide)
+  const isDragging = !busy.current && Math.abs(dragX) > 5
+  const peekRoute = isDragging ? (dragX < 0 ? nextRoute : prevRoute) : null
+  const peekDir = dragX < 0 ? 1 : -1
+
+  // When pathname changes, navigation is done — slide new content in from opposite side
+  useEffect(() => {
+    if (!busy.current || slideDir.current === 0) return
+    const W = window.innerWidth
+    // New content arrives from opposite direction to where old content left
+    const incomingFrom = slideDir.current * W // slid left (-1*W=-W)? new comes from right (+W)...
+    // Actually: if dir=-1 (swiped left), old went to -W, new comes from +W
+    // incomingFrom = -slideDir.current * W
+    const from = -slideDir.current * W
+
+    // Instantly place new content off-screen on the opposite side
+    setMs(0)
+    setDragX(from)
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        // Slide it in to center
+        setMs(240)
+        setDragX(0)
+        setTimeout(() => {
+          busy.current = false
+          slideDir.current = 0
+        }, 240)
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname])
 
   function onTouchStart(e: React.TouchEvent) {
     if (busy.current) return
@@ -75,25 +105,27 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
       return
     }
 
+    const W = window.innerWidth
+    // dir: -1 = swiped left (next page), 1 = swiped right (prev page)
+    const dir = dx < 0 ? -1 : 1
+
     busy.current = true
-    setMs(240)
-    setDragX(dx < 0 ? -window.innerWidth : window.innerWidth)
+    slideDir.current = dir
+    setMs(220)
+    setDragX(dir * W) // slide current page off in swipe direction
 
     setTimeout(() => {
       router.push(ROUTES[nextIndex].href)
-      setMs(0)
-      setDragX(0)
-      setTimeout(() => { busy.current = false }, 80)
-    }, 240)
+      // pathname useEffect will handle sliding the new page in
+    }, 220)
   }
 
   const easing = `${ms}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)`
 
   return (
-    <div
-      style={{ height: '100%', width: '100%', overflow: 'hidden', position: 'relative', background: 'var(--bg)' }}
-    >
-      {/* Adjacent page sliding in behind */}
+    <div style={{ height: '100%', width: '100%', overflow: 'hidden', position: 'relative', background: 'var(--bg)' }}>
+
+      {/* Adjacent page peek — only during active drag */}
       {peekRoute && (
         <div
           style={{
@@ -106,7 +138,7 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
             gap: 16,
             background: 'var(--bg)',
             transform: `translateX(calc(${peekDir * 100}% + ${dragX}px))`,
-            transition: ms > 0 ? `transform ${easing}` : 'none',
+            transition: 'none',
             zIndex: 1,
           }}
         >
@@ -116,21 +148,19 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
             color={peekRoute.color}
             style={{ opacity: Math.min(1, Math.abs(dragX) / 80) }}
           />
-          <span
-            style={{
-              color: peekRoute.color,
-              fontSize: 20,
-              fontWeight: 800,
-              letterSpacing: '0.05em',
-              opacity: Math.min(1, Math.abs(dragX) / 80),
-            }}
-          >
+          <span style={{
+            color: peekRoute.color,
+            fontSize: 20,
+            fontWeight: 800,
+            letterSpacing: '0.05em',
+            opacity: Math.min(1, Math.abs(dragX) / 80),
+          }}>
             {peekRoute.label}
           </span>
         </div>
       )}
 
-      {/* Current page */}
+      {/* Main content */}
       <div
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
