@@ -99,12 +99,12 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
   }
 
   return (
-    <div style={{ height: '100%', width: '100%', overflowX: 'hidden', overflowY: 'auto', position: 'relative', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100%', width: '100%', overflowX: 'clip', position: 'relative', background: 'var(--bg)' }}>
 
       {/* Adjacent page peek during active drag */}
       {peekRoute && (
         <div style={{
-          position: 'absolute', inset: 0, zIndex: 1,
+          position: 'fixed', inset: 0, zIndex: 1,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
           background: 'var(--bg)',
           transform: `translateX(calc(${peekDir * 100}% + ${dragX}px))`,
@@ -125,7 +125,7 @@ export default function SwipeNavigator({ children }: { children: React.ReactNode
         onTouchEnd={onTouchEnd}
         className={animClass || undefined}
         style={{
-          height: '100%', width: '100%', position: 'relative', zIndex: 2,
+          minHeight: '100%', width: '100%', position: 'relative', zIndex: 2,
           willChange: 'transform',
           // Remove inline transform when CSS animation is active so fill-mode takes over
           ...(animClass ? {} : {
