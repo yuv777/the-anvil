@@ -81,13 +81,14 @@
   --gold: #b45309;
 }
 
-html, body {
+html {
   height: 100%;
   width: 100%;
-  overflow-x: hidden;
 }
 
 body {
+  min-height: 100%;
+  width: 100%;
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-inter, system-ui, -apple-system), sans-serif;

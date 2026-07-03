@@ -9,6 +9,7 @@ import TaskTimer, { extractSeconds } from '@/app/components/TaskTimer'
 import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
+import { scheduleTaskReminder } from '@/lib/notifications'
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
@@ -66,6 +67,15 @@ export default function DashboardClient({
   const totalCount = tasks.length
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
   const allDone = completedCount === totalCount && totalCount > 0
+
+  // Schedule / cancel evening reminder whenever task state changes
+  useEffect(() => {
+    const remaining = totalCount - completedCount
+    const remindAt = new Date()
+    remindAt.setHours(20, 0, 0, 0) // 8 PM today
+    if (remindAt <= new Date()) return // already past 8pm
+    scheduleTaskReminder(remaining, remindAt).catch(() => {})
+  }, [completedCount, totalCount])
 
   const today = new Date().toISOString().split('T')[0]
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
