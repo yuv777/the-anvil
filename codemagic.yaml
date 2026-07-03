@@ -16,17 +16,27 @@ workflows:
     scripts:
       - name: Install dependencies
         script: npm ci
+
       - name: Sync Capacitor
         script: npx cap sync ios
+
+      - name: Add Widget Extension to Xcode project
+        script: |
+          gem install xcodeproj --no-document 2>/dev/null || true
+          ruby scripts/add_widget.rb
+
       - name: Set up code signing
         script: xcode-project use-profiles
+
       - name: Increment build number
         script: cd ios/App && agvtool new-version -all $BUILD_NUMBER
+
       - name: Build iOS IPA
         script: |
           xcode-project build-ipa \
             --project "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
+
       - name: Publish to TestFlight
         script: |
           echo "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 --decode > /tmp/private_key.p8
@@ -36,6 +46,7 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key @file:/tmp/private_key.p8 \
             --testflight
+
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

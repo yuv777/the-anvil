@@ -10,6 +10,7 @@ import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { scheduleTaskReminder, cancelNotification } from '@/lib/notifications'
+import { updateWidget } from '@/lib/widget'
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
@@ -103,10 +104,14 @@ export default function DashboardClient({
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
   const allDone = completedCount === totalCount && totalCount > 0
 
-  // Load UI prefs from localStorage
+  // Load UI prefs from localStorage and push initial widget data
   useEffect(() => {
     setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
-  }, [])
+    updateWidget(
+      initialTasks.filter(t => t.completed).length,
+      initialTasks.length
+    ).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Schedule / cancel task reminder based on user prefs
   useEffect(() => {
@@ -190,6 +195,9 @@ export default function DashboardClient({
       t.dailyTaskId === task.dailyTaskId ? { ...t, completed: newCompleted } : t
     )
     setTasks(updatedTasks)
+    // Keep lock screen widget in sync
+    const newCompleted2 = updatedTasks.filter(t => t.completed).length
+    updateWidget(newCompleted2, updatedTasks.length).catch(() => {})
     if (newCompleted) {
       Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
       const isPerfectDay = updatedTasks.filter(t => t.completed).length === totalCount
