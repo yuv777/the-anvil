@@ -9,11 +9,45 @@ import TaskTimer, { extractSeconds } from '@/app/components/TaskTimer'
 import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
-import { scheduleTaskReminder } from '@/lib/notifications'
+import { scheduleTaskReminder, cancelNotification } from '@/lib/notifications'
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
 const DAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
+function ProgressRing({ completed, total }: { completed: number; total: number }) {
+  const R = 40, stroke = 7
+  const circ = 2 * Math.PI * R
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+  const offset = total > 0 ? circ * (1 - completed / total) : circ
+  const done = completed === total && total > 0
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '4px 0' }}>
+      <svg width={100} height={100} viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+        <circle cx="50" cy="50" r={R} fill="none" stroke="var(--border-2)" strokeWidth={stroke} />
+        <circle
+          cx="50" cy="50" r={R} fill="none"
+          stroke={done ? 'var(--green)' : 'var(--green-2)'}
+          strokeWidth={stroke}
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform="rotate(-90 50 50)"
+          style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+        />
+        <text x="50" y="46" textAnchor="middle" fontSize="22" fontWeight="900" fill="var(--text)" fontFamily="inherit">{completed}</text>
+        <text x="50" y="62" textAnchor="middle" fontSize="11" fill="var(--text-3)" fontFamily="inherit">of {total}</text>
+      </svg>
+      <div>
+        <div className="text-3xl font-black" style={{ color: done ? 'var(--green)' : 'var(--text)' }}>{pct}%</div>
+        <div className="text-xs mt-1" style={{ color: 'var(--text-3)' }}>
+          {done ? 'Perfect day!' : `${total - completed} task${total - completed !== 1 ? 's' : ''} left`}
+        </div>
+        <div className="text-xs mt-2 font-semibold uppercase tracking-widest" style={{ color: 'var(--text-3)' }}>Today</div>
+      </div>
+    </div>
+  )
+}
 
 interface Task {
   id: string
@@ -62,19 +96,32 @@ export default function DashboardClient({
   const [freezeUsed, setFreezeUsed] = useState(false)
   const [activeTimer, setActiveTimer]       = useState<{ taskName: string; seconds: number } | null>(null)
   const [newAchievement, setNewAchievement] = useState<{ name: string; icon: string } | null>(null)
+  const [showProgressWidget, setShowProgressWidget] = useState(false)
 
   const completedCount = tasks.filter((t) => t.completed).length
   const totalCount = tasks.length
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
   const allDone = completedCount === totalCount && totalCount > 0
 
-  // Schedule / cancel evening reminder whenever task state changes
+  // Load UI prefs from localStorage
   useEffect(() => {
-    const remaining = totalCount - completedCount
+    setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
+  }, [])
+
+  // Schedule / cancel task reminder based on user prefs
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const enabled = localStorage.getItem('taskReminderEnabled') !== 'false'
+    if (!enabled) {
+      cancelNotification(9999).catch(() => {})
+      return
+    }
+    const timeStr = localStorage.getItem('taskReminderTime') || '20:00'
+    const [rh, rm] = timeStr.split(':').map(Number)
     const remindAt = new Date()
-    remindAt.setHours(20, 0, 0, 0) // 8 PM today
-    if (remindAt <= new Date()) return // already past 8pm
-    scheduleTaskReminder(remaining, remindAt).catch(() => {})
+    remindAt.setHours(rh, rm, 0, 0)
+    if (remindAt <= new Date()) return
+    scheduleTaskReminder(totalCount - completedCount, remindAt).catch(() => {})
   }, [completedCount, totalCount])
 
   const today = new Date().toISOString().split('T')[0]
@@ -334,6 +381,13 @@ export default function DashboardClient({
                 {freezeLoading ? '…' : 'Use'}
               </button>
             )}
+          </div>
+        )}
+
+        {/* Progress ring widget (toggled in Settings → Notifications) */}
+        {showProgressWidget && totalCount > 0 && (
+          <div className="rounded-2xl p-5 mb-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <ProgressRing completed={completedCount} total={totalCount} />
           </div>
         )}
 

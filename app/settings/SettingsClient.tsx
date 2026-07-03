@@ -10,6 +10,8 @@ import {
   ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen, Moon, QrCode,
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
+import TimePicker from '@/app/components/TimePicker'
+import { cancelNotification } from '@/lib/notifications'
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -326,6 +328,13 @@ export default function SettingsClient({
       .then(({ data }) => { if (data) setAlarms(data as SleepAlarm[]) })
   }, [userId, supabase])
 
+  // Load persisted notification prefs on mount
+  useEffect(() => {
+    setNotifReminder(localStorage.getItem('taskReminderEnabled') !== 'false')
+    setReminderTime(localStorage.getItem('taskReminderTime') || '20:00')
+    setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
+  }, [])
+
   useEffect(() => {
     import('qrcode').then(QRCode => {
       QRCode.toDataURL(userId, {
@@ -378,6 +387,22 @@ export default function SettingsClient({
     return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
   }
 
+  function handleReminderToggle(v: boolean) {
+    setNotifReminder(v)
+    localStorage.setItem('taskReminderEnabled', String(v))
+    if (!v) cancelNotification(9999).catch(() => {})
+  }
+
+  function handleReminderTimeChange(t: string) {
+    setReminderTime(t)
+    localStorage.setItem('taskReminderTime', t)
+  }
+
+  function handleProgressWidgetToggle(v: boolean) {
+    setShowProgressWidget(v)
+    localStorage.setItem('showProgressWidget', String(v))
+  }
+
   // ── reactive state ──
   const [username, setUsername]       = useState(initUsername)
   const [displayName, setDisplayName] = useState(initDisplayName)
@@ -405,13 +430,14 @@ export default function SettingsClient({
   const [deletePw, setDeletePw]             = useState('')
   const [loading, setLoading]               = useState(false)
 
-  // ── notification prefs (UI state only) ──
-  const [notifReminder, setNotifReminder]   = useState(true)
-  const [reminderTime, setReminderTime]     = useState('18:00')
-  const [notifSquad, setNotifSquad]         = useState(true)
-  const [notifStreak, setNotifStreak]       = useState(true)
-  const [notifEmail, setNotifEmail]         = useState(false)
-  const [compactView, setCompactView]       = useState(false)
+  // ── notification prefs ──
+  const [notifReminder, setNotifReminder]           = useState(true)
+  const [reminderTime, setReminderTime]             = useState('20:00')
+  const [notifSquad, setNotifSquad]                 = useState(true)
+  const [notifStreak, setNotifStreak]               = useState(true)
+  const [notifEmail, setNotifEmail]                 = useState(false)
+  const [compactView, setCompactView]               = useState(false)
+  const [showProgressWidget, setShowProgressWidget] = useState(false)
 
   function openModal(name: string) {
     setModal(name)
@@ -666,36 +692,53 @@ export default function SettingsClient({
 
         {/* ── Section 4: Notifications ── */}
         <Section title="Notifications" icon={Bell}>
-          {([
-            { key: 'reminder', label: 'Daily Reminder',   sub: 'Remind me to complete my tasks', on: notifReminder, set: setNotifReminder },
-            { key: 'squad',    label: 'Squad Activity',   sub: 'New members and milestones',      on: notifSquad,    set: setNotifSquad },
-            { key: 'streak',   label: 'Streak Alerts',    sub: 'Risk of losing your streak',      on: notifStreak,   set: setNotifStreak },
-            { key: 'email',    label: 'Email Digest',     sub: 'Weekly progress summary',         on: notifEmail,    set: setNotifEmail },
-          ] as const).map(({ key, label, sub, on, set }, i, arr) => (
-            <div
-              key={key}
-              className="px-4 py-3.5 flex items-center justify-between"
-              style={{ borderBottom: i < arr.length - 1 || notifReminder ? '1px solid var(--border)' : 'none' }}
-            >
-              <div>
-                <div className="text-sm" style={{ color: 'var(--text)' }}>{label}</div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>{sub}</div>
-              </div>
-              <Toggle on={on} onChange={set as (v: boolean) => void} />
+          <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <div className="text-sm" style={{ color: 'var(--text)' }}>Daily Task Reminder</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Remind me to complete my tasks</div>
             </div>
-          ))}
+            <Toggle on={notifReminder} onChange={handleReminderToggle} />
+          </div>
           {notifReminder && (
-            <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--surface-2)' }}>
+            <div className="px-4 py-3 flex items-center justify-between" style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
               <span className="text-xs" style={{ color: 'var(--text-2)' }}>Reminder time</span>
               <input
                 type="time"
                 value={reminderTime}
-                onChange={e => setReminderTime(e.target.value)}
+                onChange={e => handleReminderTimeChange(e.target.value)}
                 className="text-xs rounded-lg px-2.5 py-1.5 focus:outline-none"
                 style={{ background: 'var(--border)', color: 'var(--text)', border: 'none' }}
               />
             </div>
           )}
+          <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <div className="text-sm" style={{ color: 'var(--text)' }}>Squad Activity</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>New members and milestones</div>
+            </div>
+            <Toggle on={notifSquad} onChange={setNotifSquad} />
+          </div>
+          <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <div className="text-sm" style={{ color: 'var(--text)' }}>Streak Alerts</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Risk of losing your streak</div>
+            </div>
+            <Toggle on={notifStreak} onChange={setNotifStreak} />
+          </div>
+          <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: '1px solid var(--border)' }}>
+            <div>
+              <div className="text-sm" style={{ color: 'var(--text)' }}>Email Digest</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Weekly progress summary</div>
+            </div>
+            <Toggle on={notifEmail} onChange={setNotifEmail} />
+          </div>
+          <div className="px-4 py-3.5 flex items-center justify-between">
+            <div>
+              <div className="text-sm" style={{ color: 'var(--text)' }}>Show Progress on Home Screen</div>
+              <div className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Display task completion ring on dashboard</div>
+            </div>
+            <Toggle on={showProgressWidget} onChange={handleProgressWidgetToggle} />
+          </div>
         </Section>
 
         {/* ── Section 4b: Sleep Alarms ── */}
@@ -1132,14 +1175,8 @@ export default function SettingsClient({
           <div className="space-y-4">
             {/* Time picker */}
             <div>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Time</p>
-              <input
-                type="time"
-                value={newAlarmTime}
-                onChange={e => setNewAlarmTime(e.target.value)}
-                className="w-full text-2xl font-black text-center py-3 rounded-xl focus:outline-none"
-                style={{ background: 'var(--surface-2)', color: 'var(--text)', border: '1px solid var(--border-2)' }}
-              />
+              <p className="text-xs mb-3" style={{ color: 'var(--text-3)' }}>Time</p>
+              <TimePicker value={newAlarmTime} onChange={setNewAlarmTime} />
             </div>
 
             {/* Label */}
