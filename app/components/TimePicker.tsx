@@ -12,7 +12,7 @@ interface ColProps {
 
 function Col({ items, value, onChange, width = 72 }: ColProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const initIdx = Math.max(0, items.indexOf(value))
   const [localIdx, setLocalIdx] = useState(initIdx)
 
