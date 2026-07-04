@@ -37,6 +37,17 @@ workflows:
             --project "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
 
+      - name: Show xcodebuild error log (runs even on failure)
+        ignore_build_errors: true
+        script: |
+          log=$(ls /tmp/xcodebuild_logs/*.log 2>/dev/null | head -1)
+          if [ -n "$log" ]; then
+            echo "=== Last 300 lines of xcodebuild log ==="
+            tail -300 "$log"
+          else
+            echo "No xcodebuild log found"
+          fi
+
       - name: Publish to TestFlight
         script: |
           echo "$APP_STORE_CONNECT_PRIVATE_KEY_BASE64" | base64 --decode > /tmp/private_key.p8

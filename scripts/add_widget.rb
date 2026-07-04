@@ -45,6 +45,19 @@ swift_ref = widget_group.new_file('TheAnvilWidget.swift')
 swift_ref.last_known_file_type = 'sourcecode.swift'
 widget_target.source_build_phase.add_file_reference(swift_ref)
 
+# ── 3b. Link WidgetKit + SwiftUI frameworks to the widget target ─────────────
+['WidgetKit', 'SwiftUI'].each do |fw_name|
+  fw_path = "System/Library/Frameworks/#{fw_name}.framework"
+  existing = project.frameworks_group.files.find { |f| f.path == fw_path }
+  fw_ref = existing || project.frameworks_group.new_reference(fw_path)
+  unless existing
+    fw_ref.name            = "#{fw_name}.framework"
+    fw_ref.source_tree     = 'SDKROOT'
+    fw_ref.last_known_file_type = 'wrapper.framework'
+  end
+  widget_target.frameworks_build_phase.add_file_reference(fw_ref)
+end
+
 # ── 4. Configure build settings for the widget target ────────────────────────
 widget_target.build_configurations.each do |cfg|
   cfg.build_settings['PRODUCT_NAME']                          = WIDGET
