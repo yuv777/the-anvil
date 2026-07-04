@@ -35,18 +35,13 @@ workflows:
         script: |
           xcode-project build-ipa \
             --project "$XCODE_WORKSPACE" \
-            --scheme "$XCODE_SCHEME"
-
-      - name: Show xcodebuild error log (runs even on failure)
-        ignore_build_errors: true
-        script: |
-          log=$(ls /tmp/xcodebuild_logs/*.log 2>/dev/null | head -1)
-          if [ -n "$log" ]; then
-            echo "=== Last 300 lines of xcodebuild log ==="
-            tail -300 "$log"
-          else
-            echo "No xcodebuild log found"
-          fi
+            --scheme "$XCODE_SCHEME" || {
+            echo ""
+            echo "=== xcodebuild error log (last 300 lines) ==="
+            log=$(ls /tmp/xcodebuild_logs/*.log 2>/dev/null | head -1)
+            [ -n "$log" ] && tail -300 "$log" || echo "No log file found"
+            exit 1
+          }
 
       - name: Publish to TestFlight
         script: |
