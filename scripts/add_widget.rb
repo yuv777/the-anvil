@@ -48,7 +48,7 @@ end
 # ── 6. Embed the widget extension inside the main app ────────────────────────
 embed_phase = project.new(Xcodeproj::Project::Object::PBXCopyFilesBuildPhase)
 embed_phase.name = 'Embed Foundation Extensions'
-embed_phase.destination_subfolder_spec = '13'   # PlugIns folder
+embed_phase.dst_subfolder_spec = '13'   # PlugIns folder
 main_target.build_phases << embed_phase
 
 embed_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
