@@ -16,8 +16,26 @@ if project.targets.any? { |t| t.name == WIDGET }
   exit 0
 end
 
+# ── 0. Add WidgetPlugin.swift to main App target (idempotent) ────────────────
+plugin_file = 'App/WidgetPlugin.swift'
+already_in_project = main_target.source_build_phase.files.any? do |f|
+  f.file_ref&.path&.end_with?('WidgetPlugin.swift')
+end
+unless already_in_project
+  app_group = project.main_group.find_subpath('App', false) ||
+              project.main_group.groups.find { |g| g.name == 'App' || g.path == 'App' }
+  if app_group
+    plugin_ref = app_group.new_file('WidgetPlugin.swift')
+    plugin_ref.last_known_file_type = 'sourcecode.swift'
+    main_target.source_build_phase.add_file_reference(plugin_ref)
+    puts "✓ WidgetPlugin.swift added to App target"
+  else
+    puts "⚠ App group not found — WidgetPlugin.swift not added (plugin will be missing at runtime)"
+  end
+end
+
 # ── 1. Create the extension target ───────────────────────────────────────────
-widget_target = project.new_target(:app_extension, WIDGET, :ios, '16.0')
+widget_target = project.new_target(:app_extension, WIDGET, :ios, '17.0')
 
 # ── 2. Create a file group pointing at ios/App/TheAnvilWidget/ ───────────────
 widget_group = project.main_group.new_group(WIDGET, WIDGET)
@@ -34,7 +52,7 @@ widget_target.build_configurations.each do |cfg|
   cfg.build_settings['INFOPLIST_FILE']                        = "#{WIDGET}/Info.plist"
   cfg.build_settings['CODE_SIGN_ENTITLEMENTS']                = "#{WIDGET}/TheAnvilWidget.entitlements"
   cfg.build_settings['SWIFT_VERSION']                         = '5.0'
-  cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET']            = '16.0'
+  cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET']            = '17.0'
   cfg.build_settings['TARGETED_DEVICE_FAMILY']                = '1,2'
   cfg.build_settings['SKIP_INSTALL']                          = 'YES'
   cfg.build_settings['ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES'] = 'NO'
