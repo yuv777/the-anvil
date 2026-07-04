@@ -29,6 +29,7 @@ widget_target.source_build_phase.add_file_reference(swift_ref)
 
 # ── 4. Configure build settings for the widget target ────────────────────────
 widget_target.build_configurations.each do |cfg|
+  cfg.build_settings['PRODUCT_NAME']                          = WIDGET
   cfg.build_settings['PRODUCT_BUNDLE_IDENTIFIER']             = BUNDLE_ID
   cfg.build_settings['INFOPLIST_FILE']                        = "#{WIDGET}/Info.plist"
   cfg.build_settings['CODE_SIGN_ENTITLEMENTS']                = "#{WIDGET}/TheAnvilWidget.entitlements"
@@ -37,7 +38,7 @@ widget_target.build_configurations.each do |cfg|
   cfg.build_settings['TARGETED_DEVICE_FAMILY']                = '1,2'
   cfg.build_settings['SKIP_INSTALL']                          = 'YES'
   cfg.build_settings['ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES'] = 'NO'
-  cfg.build_settings['APPLICATION_EXTENSION_API_ONLY']        = 'NO'
+  cfg.build_settings['APPLICATION_EXTENSION_API_ONLY']        = 'YES'
 end
 
 # ── 5. Point main app at its entitlements ───────────────────────────────────
