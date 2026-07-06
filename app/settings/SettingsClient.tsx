@@ -912,7 +912,8 @@ export default function SettingsClient({
                 setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun'])
                 setNewAlarmQr(false)
                 setModal('addAlarm')
-                setTimeout(() => addAlarmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                // Scroll to page bottom — pb-28 on the container gives 112px clearance above the nav bar
+                setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 80)
               }}
               className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
               style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
