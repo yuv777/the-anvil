@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
@@ -310,6 +310,8 @@ export default function SettingsClient({
     if (!error) setCustomHabits(prev => prev.filter(h => h.id !== id))
     else showToast(error.message, 'error')
   }
+
+  const addAlarmRef = useRef<HTMLDivElement>(null)
 
   // ── Sleep alarms ──
   const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
@@ -844,7 +846,7 @@ export default function SettingsClient({
 
           {/* Inline add alarm form */}
           {modal === 'addAlarm' ? (
-            <div className="px-4 py-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
+            <div ref={addAlarmRef} className="px-4 py-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>New Alarm</span>
                 <button onClick={closeModal}><X size={16} style={{ color: 'var(--text-3)' }} /></button>
@@ -904,7 +906,14 @@ export default function SettingsClient({
             </div>
           ) : (
             <button
-              onClick={() => { setNewAlarmLabel('Bedtime'); setNewAlarmTime('22:30'); setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun']); setNewAlarmQr(false); setModal('addAlarm') }}
+              onClick={() => {
+                setNewAlarmLabel('Bedtime')
+                setNewAlarmTime('22:30')
+                setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun'])
+                setNewAlarmQr(false)
+                setModal('addAlarm')
+                setTimeout(() => addAlarmRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+              }}
               className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
               style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
             >
