@@ -5,8 +5,8 @@ import Link from 'next/link'
 import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, getDay, startOfWeek, endOfWeek, eachDayOfInterval as eachDay } from 'date-fns'
 import { CheckCircle2, Flame, Star, TrendingUp, ChevronLeft, ChevronRight, Camera, X, Maximize2 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell, Legend, CartesianGrid,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  LineChart, Line, CartesianGrid,
 } from 'recharts'
 import BottomNav from '@/app/components/BottomNav'
 import { createClient } from '@/lib/supabase'
@@ -67,38 +67,6 @@ function heatBorder(completed: number, total: number) {
   return 'rgba(139,92,246,0.6)'
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}>
-      <p className="font-semibold mb-1" style={{ color: 'var(--text-2)' }}>{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.name} style={{ color: p.color }}>
-          {CAT_LABELS[p.name] || p.name}: {p.value ?? '—'}{typeof p.value === 'number' && p.name !== 'count' ? '%' : ''}
-        </p>
-      ))}
-    </div>
-  )
-}
-
-const BarTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}>
-      <p className="font-semibold" style={{ color: 'var(--text)' }}>{label}</p>
-      <p style={{ color: 'var(--green)' }}>{payload[0].value} completions</p>
-    </div>
-  )
-}
-
-const PieTooltip = ({ active, payload }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
-      <p style={{ color: payload[0].payload.fill }}>{payload[0].name}: {payload[0].value}</p>
-    </div>
-  )
-}
 
 export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRow, bodyMetrics: initMetrics, userId }: Props) {
   const [mounted, setMounted] = useState(false)
@@ -205,30 +173,36 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
   }, [allTasks])
 
   const barData = CATEGORIES.map(c => ({ name: CAT_LABELS[c], count: categoryTotals[c], fill: CAT_COLORS[c] }))
-  const pieData = CATEGORIES.filter(c => categoryTotals[c] > 0).map(c => ({ name: CAT_LABELS[c], value: categoryTotals[c], fill: CAT_COLORS[c] }))
 
-  // ── 30-day line chart ───────────────────────────────────────────────────────
-  const lineData = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => {
-      const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd')
-      const day = dailyMap[date]
-      const entry: any = { date: format(subDays(new Date(), 29 - i), 'MMM d') }
-      for (const c of CATEGORIES) {
-        entry[c] = day ? (day.byCategory[c] ? 100 : 0) : null
-      }
-      return entry
-    })
-  }, [dailyMap])
-
-  // ── Overall daily activity (for streak chart) ───────────────────────────────
-  const activityData = useMemo(() => {
-    return Array.from({ length: 30 }, (_, i) => {
-      const date = format(subDays(new Date(), 29 - i), 'yyyy-MM-dd')
-      const day = dailyMap[date]
+  // ── 14-day activity bars ────────────────────────────────────────────────────
+  const activity14 = useMemo(() => {
+    return Array.from({ length: 14 }, (_, i) => {
+      const d = subDays(new Date(), 13 - i)
+      const dateStr = format(d, 'yyyy-MM-dd')
+      const day = dailyMap[dateStr]
       return {
-        date: format(subDays(new Date(), 29 - i), 'MMM d'),
-        tasks: day?.completed ?? null,
+        dateStr,
+        label: format(d, 'EEE')[0],
+        dayNum: d.getDate(),
+        completed: day?.completed ?? 0,
+        total: day?.total ?? 0,
+        isToday: dateStr === todayStr,
       }
+    })
+  }, [dailyMap, todayStr])
+
+  // ── Category completion rates (last 30 days) ────────────────────────────────
+  const catRates = useMemo(() => {
+    return CATEGORIES.map(cat => {
+      let total = 0, done = 0
+      for (let i = 0; i < 30; i++) {
+        const dateStr = format(subDays(new Date(), i), 'yyyy-MM-dd')
+        const day = dailyMap[dateStr]
+        if (!day) continue
+        const appears = day.tasks.some(t => t.category === cat)
+        if (appears) { total++; if (day.byCategory[cat]) done++ }
+      }
+      return { cat, total, done, rate: total > 0 ? Math.round((done / total) * 100) : null }
     })
   }, [dailyMap])
 
@@ -640,131 +614,115 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
           ))}
         </div>
 
-        {/* ── Category Breakdown bar chart ── */}
+        {/* ── Category Breakdown ── */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h2 className="text-xs uppercase tracking-widest mb-5" style={{ color: 'var(--text-3)' }}>Category Breakdown</h2>
-          {mounted ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={barData} layout="vertical" margin={{ left: 0, right: 10 }}>
-                <XAxis type="number" tick={{ fill: 'var(--text-3)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-2)', fontSize: 11 }} axisLine={false} tickLine={false} width={72} />
-                <Tooltip content={<BarTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-                <Bar dataKey="count" radius={[0, 6, 6, 0]}>
-                  {barData.map((entry, i) => <Cell key={i} fill={entry.fill} opacity={0.85} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <div className="h-44" />}
-        </div>
-
-        {/* ── 30-day overall completion ── */}
-        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>Daily Completion</h2>
-          <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>% of tasks completed each day — last 30 days</p>
-          {mounted ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={activityData} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: 'var(--text-3)', fontSize: 9 }} axisLine={false} tickLine={false} interval={6} />
-                <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tick={{ fill: 'var(--text-3)', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  content={({ active, payload, label }: any) => active && payload?.length && payload[0].value !== null ? (
-                    <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
-                      <p style={{ color: 'var(--text-2)' }}>{label}</p>
-                      <p style={{ color: 'var(--green)' }}>{payload[0].value} / 5 tasks</p>
+          {totalCompleted === 0 ? (
+            <p className="text-sm text-center py-3" style={{ color: 'var(--text-3)' }}>Complete tasks to see your breakdown.</p>
+          ) : (() => {
+            const maxBar = Math.max(...barData.map(b => b.count), 1)
+            return (
+              <div className="space-y-3">
+                {barData.map(({ name, count, fill }) => {
+                  const pct = (count / maxBar) * 100
+                  return (
+                    <div key={name} className="flex items-center gap-3">
+                      <span className="text-xs shrink-0 w-20" style={{ color: 'var(--text-2)' }}>{name}</span>
+                      <div className="flex-1 h-7 rounded-lg overflow-hidden" style={{ background: 'var(--border-2)' }}>
+                        <div
+                          className="h-full rounded-lg flex items-center px-2.5 transition-all"
+                          style={{ width: `${Math.max(pct, count > 0 ? 12 : 0)}%`, background: fill, opacity: 0.85, minWidth: count > 0 ? 32 : 0 }}
+                        >
+                          {pct >= 30 && (
+                            <span className="text-[11px] font-bold" style={{ color: '#000' }}>{count}</span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold w-6 text-right shrink-0" style={{ color: count > 0 ? fill : 'var(--text-3)' }}>
+                        {count}
+                      </span>
                     </div>
-                  ) : null}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="tasks"
-                  stroke="var(--green)"
-                  strokeWidth={2}
-                  dot={({ cx, cy, payload }: any) =>
-                    payload.tasks !== null
-                      ? <circle key={`dot-${cx}`} cx={cx} cy={cy} r={4} fill="var(--green)" stroke="var(--bg)" strokeWidth={2} />
-                      : <g key={`dot-${cx}`} />
-                  }
-                  activeDot={{ r: 5, fill: 'var(--green)', stroke: 'var(--bg)', strokeWidth: 2 }}
-                  connectNulls={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : <div className="h-48" />}
+                  )
+                })}
+              </div>
+            )
+          })()}
         </div>
 
-        {/* ── Category lines (last 30 days) ── */}
+        {/* ── 14-day activity bars ── */}
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>Daily Activity</h2>
+          <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>Tasks completed — last 14 days</p>
+          <div className="flex items-end gap-1 h-24">
+            {activity14.map(d => {
+              const pct = d.total > 0 ? (d.completed / d.total) * 100 : 0
+              const perfect = d.total >= 5 && d.completed === d.total
+              const hasData = d.total > 0
+              const barColor = perfect ? '#c9a227' : pct >= 80 ? 'var(--green)' : pct >= 50 ? '#f59e0b' : hasData ? '#ef4444' : 'var(--border-2)'
+              const height = hasData ? Math.max(12, pct) : 6
+              return (
+                <div key={d.dateStr} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div
+                    className="w-full rounded-t transition-all"
+                    style={{ height: `${height}%`, background: barColor, opacity: hasData ? 1 : 0.35 }}
+                  />
+                  <span className="text-[9px] font-medium" style={{ color: d.isToday ? 'var(--green)' : 'var(--text-3)' }}>
+                    {d.isToday ? '·' : d.label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            {[
+              { color: 'var(--border-2)', label: 'No data', dim: true },
+              { color: '#ef4444', label: '< 50%' },
+              { color: '#f59e0b', label: '50–79%' },
+              { color: 'var(--green)', label: '≥ 80%' },
+              { color: '#c9a227', label: 'Perfect' },
+            ].map(({ color, label, dim }) => (
+              <div key={label} className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: color, opacity: dim ? 0.35 : 1 }} />
+                <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Category Performance ── */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
           <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>Category Performance</h2>
-          <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>Completed (100%) or missed (0%) per category — last 30 days</p>
-          {mounted ? (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={lineData} margin={{ top: 8, right: 8, left: -28, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: 'var(--text-3)', fontSize: 9 }} axisLine={false} tickLine={false} interval={6} />
-                  <YAxis domain={[0, 100]} ticks={[0, 100]} tick={{ fill: 'var(--text-3)', fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={v => v === 100 ? '✓' : '✗'} />
-                  <Tooltip content={<CustomTooltip />} />
-                  {CATEGORIES.map(c => (
-                    <Line
-                      key={c}
-                      type="step"
-                      dataKey={c}
-                      stroke={CAT_COLORS[c]}
-                      strokeWidth={1.5}
-                      dot={({ cx, cy, payload }: any) =>
-                        payload[c] !== null
-                          ? <circle key={`${c}-${cx}`} cx={cx} cy={cy} r={3} fill={CAT_COLORS[c]} stroke="var(--bg)" strokeWidth={1.5} />
-                          : <g key={`${c}-${cx}`} />
-                      }
-                      activeDot={{ r: 4 }}
-                      connectNulls={false}
-                    />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-4">
-                {CATEGORIES.map(c => (
-                  <div key={c} className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[c] }} />
-                    <span className="text-xs" style={{ color: 'var(--text-2)' }}>{CAT_LABELS[c]}</span>
+          <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>Completion rate — last 30 days</p>
+          <div className="space-y-4">
+            {catRates.map(({ cat, total, done, rate }) => {
+              const noData = rate === null
+              const rateColor = noData ? 'var(--text-3)' : rate >= 80 ? 'var(--green)' : rate >= 50 ? '#f59e0b' : '#ef4444'
+              const barColor = noData ? 'var(--border-2)' : rate >= 80 ? 'var(--green)' : rate >= 50 ? '#f59e0b' : '#ef4444'
+              return (
+                <div key={cat}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CAT_COLORS[cat] }} />
+                      <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{CAT_LABELS[cat]}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!noData && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{done}/{total} days</span>}
+                      <span className="text-xs font-bold w-8 text-right" style={{ color: rateColor }}>
+                        {noData ? '—' : `${rate}%`}
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </>
-          ) : <div className="h-56" />}
-        </div>
-
-        {/* ── Pie chart ── */}
-        {pieData.length > 0 && (
-          <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-            <h2 className="text-xs uppercase tracking-widest mb-5" style={{ color: 'var(--text-3)' }}>Category Distribution</h2>
-            {mounted ? (
-              <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                      dataKey="value" paddingAngle={3}>
-                      {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} opacity={0.85} />)}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
-                  {pieData.map(d => {
-                    const pct = Math.round((d.value / totalCompleted) * 100)
-                    return (
-                      <div key={d.name} className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full" style={{ background: d.fill }} />
-                        <span className="text-xs" style={{ color: 'var(--text-2)' }}>{d.name} {pct}%</span>
-                      </div>
-                    )
-                  })}
+                  <div className="h-2 rounded-full overflow-hidden" style={{ background: 'var(--border-2)' }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${rate ?? 0}%`, background: barColor }}
+                    />
+                  </div>
                 </div>
-              </>
-            ) : <div className="h-52" />}
+              )
+            })}
           </div>
-        )}
+        </div>
 
         {/* ── Calendar heatmap ── */}
         <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
