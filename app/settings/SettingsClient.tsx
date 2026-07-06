@@ -842,15 +842,76 @@ export default function SettingsClient({
             </div>
           )}
 
-          {/* Add alarm */}
-          <button
-            onClick={() => { setNewAlarmLabel('Bedtime'); setNewAlarmTime('22:30'); setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun']); setNewAlarmQr(false); openModal('addAlarm') }}
-            className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
-            style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
-          >
-            <Plus size={16} />
-            <span className="text-sm font-medium">Add Alarm</span>
-          </button>
+          {/* Inline add alarm form */}
+          {modal === 'addAlarm' ? (
+            <div className="px-4 py-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>New Alarm</span>
+                <button onClick={closeModal}><X size={16} style={{ color: 'var(--text-3)' }} /></button>
+              </div>
+
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Time</p>
+                <input
+                  type="time"
+                  value={newAlarmTime}
+                  onChange={e => setNewAlarmTime(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-base focus:outline-none"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
+                />
+              </div>
+
+              <div>
+                <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Label</p>
+                <TextInput value={newAlarmLabel} onChange={setNewAlarmLabel} placeholder="e.g. Bedtime, Wake up" />
+              </div>
+
+              <div>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Repeat</p>
+                <div className="flex gap-1.5">
+                  {DAYS.map(d => {
+                    const active = newAlarmDays.includes(d)
+                    return (
+                      <button
+                        key={d}
+                        onClick={() => toggleAlarmDay(d)}
+                        className="flex-1 h-9 rounded-xl text-xs font-bold transition-all"
+                        style={{
+                          background: active ? 'var(--green)' : 'var(--surface-2)',
+                          color: active ? '#000' : 'var(--text-3)',
+                          border: `1px solid ${active ? 'var(--green)' : 'var(--border-2)'}`,
+                        }}
+                      >
+                        {DAY_LABELS[d]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div
+                className="flex items-center justify-between px-3 py-3 rounded-xl"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}
+              >
+                <div className="flex items-center gap-2">
+                  <QrCode size={13} style={{ color: 'var(--text-2)' }} />
+                  <span className="text-sm" style={{ color: 'var(--text)' }}>Require QR to dismiss</span>
+                </div>
+                <Toggle on={newAlarmQr} onChange={setNewAlarmQr} />
+              </div>
+
+              <SaveButton onClick={addAlarm} loading={loading} label="Set Alarm" disabled={!newAlarmTime || newAlarmDays.length === 0} />
+            </div>
+          ) : (
+            <button
+              onClick={() => { setNewAlarmLabel('Bedtime'); setNewAlarmTime('22:30'); setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun']); setNewAlarmQr(false); setModal('addAlarm') }}
+              className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
+              style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
+            >
+              <Plus size={16} />
+              <span className="text-sm font-medium">Add Alarm</span>
+            </button>
+          )}
         </Section>
 
         {/* ── Section 5: Appearance ── */}
@@ -1184,80 +1245,6 @@ export default function SettingsClient({
         </Modal>
       )}
 
-      {/* Add Alarm */}
-      {modal === 'addAlarm' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="New Alarm" onClose={closeModal} />
-
-          <div className="space-y-4">
-            {/* Time */}
-            <div>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Time</p>
-              <input
-                type="time"
-                value={newAlarmTime}
-                onChange={e => setNewAlarmTime(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl text-sm focus:outline-none"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)', fontSize: 18 }}
-              />
-            </div>
-
-            {/* Label */}
-            <div>
-              <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Label</p>
-              <TextInput value={newAlarmLabel} onChange={setNewAlarmLabel} placeholder="e.g. Bedtime, Wake up" />
-            </div>
-
-            {/* Days */}
-            <div>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Repeat</p>
-              <div className="flex gap-2">
-                {DAYS.map(d => {
-                  const active = newAlarmDays.includes(d)
-                  return (
-                    <button
-                      key={d}
-                      onClick={() => toggleAlarmDay(d)}
-                      className="flex-1 h-9 rounded-xl text-xs font-bold transition-all"
-                      style={{
-                        background: active ? 'var(--green)' : 'var(--surface-2)',
-                        color: active ? '#000' : 'var(--text-3)',
-                        border: `1px solid ${active ? 'var(--green)' : 'var(--border-2)'}`,
-                      }}
-                    >
-                      {DAY_LABELS[d]}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* QR dismiss toggle */}
-            <div
-              className="flex items-center justify-between px-4 py-3.5 rounded-xl"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}
-            >
-              <div>
-                <div className="flex items-center gap-2">
-                  <QrCode size={14} style={{ color: 'var(--text-2)' }} />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>Require QR scan to dismiss</span>
-                </div>
-                <p className="text-xs mt-0.5 ml-5" style={{ color: 'var(--text-3)' }}>
-                  Forces you out of bed to scan the code
-                </p>
-              </div>
-              <Toggle on={newAlarmQr} onChange={setNewAlarmQr} />
-            </div>
-          </div>
-
-          <SaveButton
-            onClick={addAlarm}
-            loading={loading}
-            label="Set Alarm"
-            disabled={!newAlarmTime || newAlarmDays.length === 0}
-          />
-        </Modal>
-      )}
 
       <BottomNav />
     </div>
