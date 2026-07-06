@@ -115,7 +115,12 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
     >
       <div
         className="w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4"
-        style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
+        style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          maxHeight: '88vh',
+          overflowY: 'auto',
+        }}
         onClick={e => e.stopPropagation()}
       >
         {children}
