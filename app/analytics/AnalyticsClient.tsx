@@ -7,6 +7,7 @@ import { CheckCircle2, Flame, Star, TrendingUp, ChevronLeft, ChevronRight, Camer
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import BottomNav from '@/app/components/BottomNav'
 import { createClient } from '@/lib/supabase'
@@ -173,6 +174,28 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
   }, [allTasks])
 
   const barData = CATEGORIES.map(c => ({ name: CAT_LABELS[c], count: categoryTotals[c], fill: CAT_COLORS[c] }))
+  const pieData = CATEGORIES.filter(c => categoryTotals[c] > 0).map(c => ({ name: CAT_LABELS[c], value: categoryTotals[c], fill: CAT_COLORS[c] }))
+
+  // ── Day-of-week consistency (last 90 days) ──────────────────────────────────
+  const dayConsistency = useMemo(() => {
+    // Mon–Sun order: getDay() returns 0=Sun..6=Sat, remap to Mon-first
+    const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0]
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const counts: Record<number, { total: number; done: number }> = {}
+    for (let d = 0; d <= 6; d++) counts[d] = { total: 0, done: 0 }
+    for (const [dateStr, day] of Object.entries(dailyMap)) {
+      if (day.total === 0) continue
+      const dow = new Date(dateStr + 'T12:00:00').getDay()
+      counts[dow].total++
+      if (day.completed > 0) counts[dow].done++
+    }
+    return DOW_ORDER.map((dow, i) => ({
+      label: labels[i],
+      total: counts[dow].total,
+      done: counts[dow].done,
+      rate: counts[dow].total > 0 ? Math.round((counts[dow].done / counts[dow].total) * 100) : null,
+    }))
+  }, [dailyMap])
 
   // ── 14-day activity bars ────────────────────────────────────────────────────
   const activity14 = useMemo(() => {
@@ -722,6 +745,86 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
               )
             })}
           </div>
+        </div>
+
+        {/* ── Pie chart ── */}
+        {pieData.length > 0 && mounted && (
+          <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+            <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>Category Distribution</h2>
+            <p className="text-xs mb-4" style={{ color: 'var(--text-3)' }}>Share of all-time completions by category</p>
+            {pieData.length === 1 ? (
+              <p className="text-xs py-4 text-center" style={{ color: 'var(--text-3)' }}>
+                Complete tasks in more categories to see distribution.
+              </p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%" cy="50%"
+                      innerRadius={48} outerRadius={76}
+                      dataKey="value"
+                      paddingAngle={3}
+                      label={({ percent }: { percent?: number }) => (percent ?? 0) > 0.08 ? `${Math.round((percent ?? 0) * 100)}%` : ''}
+                      labelLine={false}
+                    >
+                      {pieData.map((entry, i) => <Cell key={i} fill={entry.fill} opacity={0.85} />)}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }: any) => active && payload?.length ? (
+                        <div className="rounded-xl px-3 py-2 text-xs" style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}>
+                          <p style={{ color: payload[0].payload.fill }}>{payload[0].name}: {payload[0].value} tasks</p>
+                        </div>
+                      ) : null}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
+                  {pieData.map(d => (
+                    <div key={d.name} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ background: d.fill }} />
+                      <span className="text-xs" style={{ color: 'var(--text-2)' }}>{d.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Day-of-week consistency ── */}
+        <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
+          <h2 className="text-xs uppercase tracking-widest mb-1" style={{ color: 'var(--text-3)' }}>Consistency by Day</h2>
+          <p className="text-xs mb-5" style={{ color: 'var(--text-3)' }}>Which days of the week you show up most</p>
+          {dayConsistency.every(d => d.rate === null) ? (
+            <p className="text-sm text-center py-3" style={{ color: 'var(--text-3)' }}>Log tasks across multiple days to see your consistency pattern.</p>
+          ) : (
+            <div className="space-y-3">
+              {dayConsistency.map(({ label, total, done, rate }) => {
+                const noData = rate === null
+                const barColor = noData ? 'var(--border-2)' : rate >= 80 ? 'var(--green)' : rate >= 50 ? '#f59e0b' : '#ef4444'
+                const rateColor = noData ? 'var(--text-3)' : rate >= 80 ? 'var(--green)' : rate >= 50 ? '#f59e0b' : '#ef4444'
+                return (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="text-xs font-semibold w-8 shrink-0" style={{ color: 'var(--text-2)' }}>{label}</span>
+                    <div className="flex-1 h-5 rounded-lg overflow-hidden" style={{ background: 'var(--border-2)' }}>
+                      <div
+                        className="h-full rounded-lg transition-all"
+                        style={{ width: `${rate ?? 0}%`, background: barColor, opacity: noData ? 0 : 1 }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 w-20 shrink-0 justify-end">
+                      {!noData && <span className="text-[10px]" style={{ color: 'var(--text-3)' }}>{done}/{total}</span>}
+                      <span className="text-xs font-bold" style={{ color: rateColor }}>
+                        {noData ? '—' : `${rate}%`}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Calendar heatmap ── */}
