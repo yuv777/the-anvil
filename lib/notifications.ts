@@ -86,10 +86,13 @@ export async function setupNotificationListeners() {
   const plugin = await getPlugin()
   if (!plugin) return
 
+  // Fires when user taps any local notification
   await plugin.addListener('localNotificationActionPerformed', (action) => {
+    const id = action.notification.id
     const extra = action.notification.extra as { qrDismiss?: boolean } | undefined
-    if (extra?.qrDismiss) {
-      window.location.href = '/alarm-dismiss'
+    // Alarm notifications are IDs 1000-1999
+    if (id >= 1000 && id < 2000) {
+      window.location.href = extra?.qrDismiss ? '/alarm-dismiss?qr=1' : '/alarm-dismiss'
     }
   })
 }

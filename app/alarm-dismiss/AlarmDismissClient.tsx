@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import jsQR from 'jsqr'
 
-export default function AlarmDismissClient({ userId }: { userId: string }) {
+export default function AlarmDismissClient({ userId, requireQr = false }: { userId: string; requireQr?: boolean }) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -92,8 +92,9 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
     return () => { if (scanIntervalRef.current) clearInterval(scanIntervalRef.current) }
   }, [scanning, userId, dismiss])
 
-  // Auto-start camera
+  // Auto-start camera only for QR alarms
   useEffect(() => {
+    if (!requireQr) return
     async function start() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
@@ -107,7 +108,7 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
       }
     }
     start()
-  }, [])
+  }, [requireQr])
 
   if (dismissed) {
     return (
@@ -127,13 +128,23 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
         <div className="text-3xl font-bold" style={{ color: 'var(--text-2)' }}>{time}</div>
       </div>
 
-      {/* Camera viewport */}
+      {/* Main content */}
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-5">
-        {cameraError ? (
+        {!requireQr ? (
+          /* Simple dismiss button for non-QR alarms */
+          <button
+            onClick={dismiss}
+            className="w-64 h-64 rounded-full flex flex-col items-center justify-center gap-3 active:scale-95 transition-transform"
+            style={{ background: 'rgba(248,113,113,0.1)', border: '3px solid #f87171' }}
+          >
+            <span className="text-5xl font-black" style={{ color: '#f87171' }}>STOP</span>
+            <span className="text-sm" style={{ color: 'var(--text-3)' }}>Tap to dismiss</span>
+          </button>
+        ) : cameraError ? (
           <div className="text-center space-y-3">
             <p className="text-base font-semibold" style={{ color: 'var(--text)' }}>Camera access needed</p>
             <p className="text-sm" style={{ color: 'var(--text-3)' }}>
-              Go to your phone Settings → Safari/Chrome → Camera → Allow
+              Go to Settings → The Anvil → Camera → Allow
             </p>
           </div>
         ) : (
@@ -146,18 +157,13 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
               style={{ border: '2px solid var(--green)', boxShadow: '0 0 30px rgba(34,197,94,0.2)' }}
             >
               <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-              {/* Corner brackets */}
               {[
                 'top-3 left-3 border-t-2 border-l-2',
                 'top-3 right-3 border-t-2 border-r-2',
                 'bottom-3 left-3 border-b-2 border-l-2',
                 'bottom-3 right-3 border-b-2 border-r-2',
               ].map((cls, i) => (
-                <div
-                  key={i}
-                  className={`absolute w-6 h-6 ${cls}`}
-                  style={{ borderColor: 'var(--green)', borderRadius: 2 }}
-                />
+                <div key={i} className={`absolute w-6 h-6 ${cls}`} style={{ borderColor: 'var(--green)', borderRadius: 2 }} />
               ))}
             </div>
             <p className="text-xs text-center" style={{ color: 'var(--text-3)' }}>

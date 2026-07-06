@@ -73,15 +73,8 @@ export default function AlarmManager() {
         if (firedKeys.has(key)) continue
         firedKeys.add(key)
 
-        if (alarm.qr_dismiss) {
-          router.push('/alarm-dismiss')
-        } else if (!Capacitor.isNativePlatform() && 'Notification' in window && Notification.permission === 'granted') {
-          new Notification(alarm.label || 'Sleep Alarm', {
-            body: `Time: ${currentMinute}`,
-            icon: '/icon-192.png',
-            tag: alarm.id,
-          })
-        }
+        // Always open the in-app alarm screen (beep + dismiss UI)
+        router.push(alarm.qr_dismiss ? '/alarm-dismiss?qr=1' : '/alarm-dismiss')
       }
     }, 10000)
 
