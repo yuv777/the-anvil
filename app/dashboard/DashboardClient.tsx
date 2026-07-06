@@ -10,7 +10,19 @@ import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { scheduleTaskReminder, cancelNotification, requestNotificationPermission } from '@/lib/notifications'
-import { updateWidget } from '@/lib/widget'
+import { updateWidget, CategoryWidgetInfo } from '@/lib/widget'
+
+const TASK_CATEGORIES = ['physical', 'mental', 'confidence', 'spiritual', 'lifestyle'] as const
+
+function catBreakdown(tasks: Task[]): CategoryWidgetInfo[] {
+  return TASK_CATEGORIES
+    .map(cat => ({
+      name: cat,
+      completed: tasks.filter(t => t.category === cat && t.completed).length,
+      total: tasks.filter(t => t.category === cat).length,
+    }))
+    .filter(c => c.total > 0)
+}
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
@@ -110,7 +122,8 @@ export default function DashboardClient({
     requestNotificationPermission().catch(() => {})
     updateWidget(
       initialTasks.filter(t => t.completed).length,
-      initialTasks.length
+      initialTasks.length,
+      catBreakdown(initialTasks)
     ).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -199,7 +212,7 @@ export default function DashboardClient({
     setTasks(updatedTasks)
     // Keep lock screen widget in sync
     const newCompleted2 = updatedTasks.filter(t => t.completed).length
-    updateWidget(newCompleted2, updatedTasks.length).catch(() => {})
+    updateWidget(newCompleted2, updatedTasks.length, catBreakdown(updatedTasks)).catch(() => {})
     if (newCompleted) {
       Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
       const isPerfectDay = updatedTasks.filter(t => t.completed).length === totalCount
