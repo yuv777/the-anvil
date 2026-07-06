@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase'
 import SwipeableTask from './SwipeableTask'
 import BottomNav from '@/app/components/BottomNav'
 import TaskTimer, { extractSeconds } from '@/app/components/TaskTimer'
-import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { scheduleTaskReminder, cancelNotification, requestNotificationPermission } from '@/lib/notifications'
@@ -73,7 +72,6 @@ interface Props {
   perfectDays: Record<string, number>
   daysUntilUpgrade: number
   userId: string
-  streakFreezes: number
   lastCompletionDate: string | null
   weeklyStats: WeekDay[]
   perfectDaysThisWeek: number
@@ -82,7 +80,7 @@ interface Props {
 export default function DashboardClient({
   username, tasks: initialTasks, taskError, currentStreak, longestStreak,
   overallTier, skillLevels, perfectDays, daysUntilUpgrade, userId,
-  streakFreezes: initialFreezes, lastCompletionDate, weeklyStats, perfectDaysThisWeek,
+  lastCompletionDate, weeklyStats, perfectDaysThisWeek,
 }: Props) {
   const router = useRouter()
   const [tasks, setTasks] = useState(initialTasks)
@@ -91,10 +89,7 @@ export default function DashboardClient({
   const [showCelebration, setShowCelebration] = useState(false)
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set())
   const [hintDismissed, setHintDismissed] = useState(false)
-  const [freezes, setFreezes] = useState(initialFreezes)
-  const [freezeLoading, setFreezeLoading] = useState(false)
-  const [freezeUsed, setFreezeUsed] = useState(false)
-  const [activeTimer, setActiveTimer]       = useState<{ taskName: string; seconds: number } | null>(null)
+const [activeTimer, setActiveTimer]       = useState<{ taskName: string; seconds: number } | null>(null)
   const [newAchievement, setNewAchievement] = useState<{ name: string; icon: string } | null>(null)
   const [showProgressWidget, setShowProgressWidget] = useState(false)
 
@@ -127,33 +122,10 @@ export default function DashboardClient({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = new Date().toISOString().split('T')[0]
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
-  const canFreeze = freezes > 0 && currentStreak > 0
-    && lastCompletionDate !== today && lastCompletionDate !== yesterday
-    && !freezeUsed
 
   function handleSkip(taskId: string) {
     setSkippedIds((prev) => new Set([...prev, taskId]))
     setHintDismissed(true)
-  }
-
-  async function useStreakFreeze() {
-    if (!canFreeze || freezeLoading) return
-    setFreezeLoading(true)
-    const supabase = createClient()
-    const [{ error: streakErr }, { error: freezeErr }] = await Promise.all([
-      supabase.from('user_streaks')
-        .upsert({ user_id: userId, last_completion_date: yesterday, current_streak: currentStreak, longest_streak: longestStreak })
-        .eq('user_id', userId),
-      supabase.from('user_skill_levels')
-        .update({ streak_freezes: Math.max(0, freezes - 1) })
-        .eq('user_id', userId),
-    ])
-    setFreezeLoading(false)
-    if (!streakErr && !freezeErr) {
-      setFreezes(f => Math.max(0, f - 1))
-      setFreezeUsed(true)
-    }
   }
 
   async function checkAndAwardAchievements(supabase: any, completedTasks: Task[], streak: number, tier: number, levels: Record<string, number>) {
@@ -357,34 +329,6 @@ export default function DashboardClient({
             </div>
           ))}
         </div>
-
-        {/* Streak Freeze */}
-        {freezes > 0 && (
-          <div className="rounded-2xl px-4 py-3 mb-4 flex items-center justify-between"
-            style={{ background: canFreeze ? 'rgba(96,165,250,0.06)' : 'var(--surface)', border: `1px solid ${canFreeze ? 'rgba(96,165,250,0.2)' : 'var(--border)'}` }}>
-            <div className="flex items-center gap-2.5">
-              <Snowflake size={14} style={{ color: '#60a5fa' }} />
-              <div>
-                <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-                  {freezes} freeze{freezes !== 1 ? 's' : ''} available
-                </span>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>
-                  {canFreeze ? 'Streak at risk — protect it now' : freezeUsed ? 'Freeze used for today' : 'Streak is safe'}
-                </p>
-              </div>
-            </div>
-            {canFreeze && (
-              <button
-                onClick={useStreakFreeze}
-                disabled={freezeLoading}
-                className="text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
-                style={{ background: '#60a5fa', color: '#000' }}
-              >
-                {freezeLoading ? '…' : 'Use'}
-              </button>
-            )}
-          </div>
-        )}
 
         {/* Progress ring widget (toggled in Settings → Notifications) */}
         {showProgressWidget && totalCount > 0 && (

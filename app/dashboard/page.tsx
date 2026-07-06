@@ -144,18 +144,6 @@ export default async function DashboardPage() {
 
   if (!skillRow || !skillRow.completed_onboarding) redirect('/onboarding')
 
-  // ── Monthly streak freeze refresh ──
-  const streakFreezes: number = skillRow.streak_freezes ?? 0
-  const lastFreezeGrant: string = skillRow.last_freeze_grant || ''
-  let effectiveFreezes = streakFreezes
-  if (lastFreezeGrant !== currentMonth) {
-    const newFreezes = Math.max(streakFreezes, 2)
-    await supabase.from('user_skill_levels')
-      .update({ streak_freezes: newFreezes, last_freeze_grant: currentMonth })
-      .eq('user_id', user.id)
-    effectiveFreezes = newFreezes
-  }
-
   // ── Weekly stats ──
   const weeklyMap: Record<string, { completed: number; total: number }> = {}
   for (const t of (weeklyResult.data || [])) {
@@ -198,7 +186,6 @@ export default async function DashboardPage() {
       perfectDays={{ physical: sharedPerfectDays, mental: sharedPerfectDays, confidence: sharedPerfectDays, spiritual: sharedPerfectDays, lifestyle: sharedPerfectDays }}
       daysUntilUpgrade={daysUntilUpgrade}
       userId={user.id}
-      streakFreezes={effectiveFreezes}
       lastCompletionDate={lastCompletion}
       weeklyStats={weeklyStats}
       perfectDaysThisWeek={perfectDaysThisWeek}
