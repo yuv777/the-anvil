@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
 import TimePicker from '@/app/components/TimePicker'
-import { cancelNotification } from '@/lib/notifications'
+import { cancelNotification, scheduleTaskReminder, requestNotificationPermission } from '@/lib/notifications'
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -387,15 +387,28 @@ export default function SettingsClient({
     return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
   }
 
+  function scheduleReminderNow(enabled: boolean, timeStr: string) {
+    if (!enabled) { cancelNotification(9999).catch(() => {}); return }
+    const [rh, rm] = timeStr.split(':').map(Number)
+    const remindAt = new Date()
+    remindAt.setHours(rh, rm, 0, 0)
+    if (remindAt <= new Date()) remindAt.setDate(remindAt.getDate() + 1)
+    // We don't know task count here; schedule with a generic message
+    requestNotificationPermission()
+      .then(() => scheduleTaskReminder(1, remindAt))
+      .catch(() => {})
+  }
+
   function handleReminderToggle(v: boolean) {
     setNotifReminder(v)
     localStorage.setItem('taskReminderEnabled', String(v))
-    if (!v) cancelNotification(9999).catch(() => {})
+    scheduleReminderNow(v, reminderTime)
   }
 
   function handleReminderTimeChange(t: string) {
     setReminderTime(t)
     localStorage.setItem('taskReminderTime', t)
+    if (notifReminder) scheduleReminderNow(true, t)
   }
 
   function handleProgressWidgetToggle(v: boolean) {
