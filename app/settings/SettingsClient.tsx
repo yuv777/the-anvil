@@ -1,16 +1,17 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 import BottomNav from '@/app/components/BottomNav'
 import {
   User, Lock, Sliders, Bell, Palette, Shield, Info,
-  ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen, Moon, QrCode,
+  ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen,
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
 import { cancelNotification, scheduleTaskReminder, requestNotificationPermission } from '@/lib/notifications'
+
 
 // ─── Constants ────────────────────────────────────────────────
 
@@ -311,87 +312,12 @@ export default function SettingsClient({
     else showToast(error.message, 'error')
   }
 
-  const addAlarmRef = useRef<HTMLDivElement>(null)
-
-  // ── Sleep alarms ──
-  const DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
-  const DAY_LABELS: Record<string, string> = { mon: 'M', tue: 'T', wed: 'W', thu: 'T', fri: 'F', sat: 'S', sun: 'S' }
-
-  interface SleepAlarm { id: string; label: string; alarm_time: string; days: string[]; enabled: boolean; qr_dismiss: boolean }
-  const [alarms, setAlarms]           = useState<SleepAlarm[]>([])
-  const [newAlarmLabel, setNewAlarmLabel] = useState('Bedtime')
-  const [newAlarmTime, setNewAlarmTime]   = useState('22:30')
-  const [newAlarmDays, setNewAlarmDays]   = useState<string[]>(['mon','tue','wed','thu','fri','sat','sun'])
-  const [newAlarmQr, setNewAlarmQr]       = useState(false)
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default')
-  const [qrCodeUrl, setQrCodeUrl]         = useState('')
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotifPermission(Notification.permission)
-    }
-    supabase.from('user_sleep_alarms').select('*').eq('user_id', userId).order('alarm_time')
-      .then(({ data }) => { if (data) setAlarms(data as SleepAlarm[]) })
-  }, [userId, supabase])
-
   // Load persisted notification prefs on mount
   useEffect(() => {
     setNotifReminder(localStorage.getItem('taskReminderEnabled') !== 'false')
     setReminderTime(localStorage.getItem('taskReminderTime') || '20:00')
     setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
   }, [])
-
-  useEffect(() => {
-    import('qrcode').then(QRCode => {
-      QRCode.toDataURL(userId, {
-        width: 220, margin: 2,
-        color: { dark: '#f0f0f0', light: '#0e0e0e' },
-      }).then(url => setQrCodeUrl(url))
-    })
-  }, [userId])
-
-  async function requestNotifPermission() {
-    if (!('Notification' in window)) { showToast('Notifications not supported in this browser', 'error'); return }
-    const result = await Notification.requestPermission()
-    setNotifPermission(result)
-    if (result === 'granted') showToast('Notifications enabled')
-    else showToast('Permission denied — enable notifications in browser settings', 'error')
-  }
-
-  function toggleAlarmDay(day: string) {
-    setNewAlarmDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])
-  }
-
-  async function addAlarm() {
-    if (!newAlarmTime || newAlarmDays.length === 0) { showToast('Pick a time and at least 1 day', 'error'); return }
-    setLoading(true)
-    const { data, error } = await supabase.from('user_sleep_alarms')
-      .insert({ user_id: userId, label: newAlarmLabel.trim() || 'Alarm', alarm_time: newAlarmTime, days: newAlarmDays, enabled: true, qr_dismiss: newAlarmQr })
-      .select().single()
-    setLoading(false)
-    if (error) { showToast(error.message, 'error'); return }
-    if (data) setAlarms(prev => [...prev, data as SleepAlarm].sort((a, b) => a.alarm_time.localeCompare(b.alarm_time)))
-    closeModal()
-    showToast('Alarm set')
-  }
-
-  async function toggleAlarm(id: string, enabled: boolean) {
-    const { error } = await supabase.from('user_sleep_alarms').update({ enabled }).eq('id', id)
-    if (!error) setAlarms(prev => prev.map(a => a.id === id ? { ...a, enabled } : a))
-  }
-
-  async function deleteAlarm(id: string) {
-    const { error } = await supabase.from('user_sleep_alarms').delete().eq('id', id)
-    if (!error) setAlarms(prev => prev.filter(a => a.id !== id))
-    else showToast(error.message, 'error')
-  }
-
-  function fmt12h(time: string) {
-    const [h, m] = time.split(':').map(Number)
-    const ampm = h >= 12 ? 'PM' : 'AM'
-    const hour = h % 12 || 12
-    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`
-  }
 
   function scheduleReminderNow(enabled: boolean, timeStr: string) {
     if (!enabled) { cancelNotification(9999).catch(() => {}); return }
@@ -758,170 +684,6 @@ export default function SettingsClient({
             </div>
             <Toggle on={showProgressWidget} onChange={handleProgressWidgetToggle} />
           </div>
-        </Section>
-
-        {/* ── Section 4b: Sleep Alarms ── */}
-        <Section title="Sleep Alarms" icon={Moon}>
-          {/* Notification permission banner — web only, not shown in native iOS app */}
-          {notifPermission !== 'granted' && typeof window !== 'undefined' && !(window as any).Capacitor?.isNativePlatform?.() && (
-            <button
-              onClick={requestNotifPermission}
-              className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-              style={{ borderBottom: '1px solid var(--border)', background: 'rgba(201,162,39,0.05)' }}
-            >
-              <Bell size={15} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold" style={{ color: 'var(--gold)' }}>Enable notifications</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>Required for alarms to ring</p>
-              </div>
-              <ChevronRight size={13} style={{ color: 'var(--gold)' }} />
-            </button>
-          )}
-
-          {/* Alarm list */}
-          {alarms.length === 0 ? (
-            <div className="px-4 py-5 text-sm" style={{ color: 'var(--text-3)', borderBottom: '1px solid var(--border)' }}>
-              No alarms set yet.
-            </div>
-          ) : alarms.map((alarm, i) => (
-            <div
-              key={alarm.id}
-              className="flex items-center gap-3 px-4 py-3.5"
-              style={{ borderBottom: '1px solid var(--border)' }}
-            >
-              {/* Time + label */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-black" style={{ color: alarm.enabled ? 'var(--text)' : 'var(--text-3)' }}>
-                    {fmt12h(alarm.alarm_time)}
-                  </span>
-                </div>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-3)' }}>{alarm.label}</p>
-                <div className="flex gap-1 mt-1.5">
-                  {DAYS.map(d => (
-                    <span
-                      key={d}
-                      className="text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center"
-                      style={{
-                        background: alarm.days.includes(d) ? 'var(--green)' : 'var(--surface-2)',
-                        color: alarm.days.includes(d) ? '#000' : 'var(--text-3)',
-                      }}
-                    >
-                      {DAY_LABELS[d]}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              {/* Toggle + delete */}
-              <div className="flex items-center gap-3 shrink-0">
-                {alarm.qr_dismiss && <QrCode size={14} style={{ color: 'var(--text-3)' }} />}
-                <Toggle on={alarm.enabled} onChange={v => toggleAlarm(alarm.id, v)} />
-                <button onClick={() => deleteAlarm(alarm.id)}>
-                  <Trash2 size={15} style={{ color: '#f87171' }} />
-                </button>
-              </div>
-            </div>
-          ))}
-
-          {/* QR code for dismissal */}
-          {qrCodeUrl && (
-            <div className="px-4 py-5" style={{ borderTop: '1px solid var(--border)' }}>
-              <p className="text-xs font-semibold mb-1" style={{ color: 'var(--text)' }}>Your wake-up QR code</p>
-              <p className="text-xs mb-4" style={{ color: 'var(--text-3)' }}>
-                Screenshot or print this. Stick it somewhere you must get up to reach — bathroom mirror, kettle, front door.
-              </p>
-              <div className="flex flex-col items-center gap-4">
-                <img src={qrCodeUrl} alt="Wake-up QR code" className="rounded-2xl" style={{ width: 160, height: 160 }} />
-                <a
-                  href={qrCodeUrl}
-                  download="anvil-wakeup-qr.png"
-                  className="text-xs px-4 py-2 rounded-xl font-medium"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text-2)' }}
-                >
-                  Save QR code
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* Inline add alarm form */}
-          {modal === 'addAlarm' ? (
-            <div ref={addAlarmRef} className="px-4 py-4 space-y-4" style={{ borderTop: '1px solid var(--border)' }}>
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>New Alarm</span>
-                <button onClick={closeModal}><X size={16} style={{ color: 'var(--text-3)' }} /></button>
-              </div>
-
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Time</p>
-                <input
-                  type="time"
-                  value={newAlarmTime}
-                  onChange={e => setNewAlarmTime(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl text-base focus:outline-none"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}
-                />
-              </div>
-
-              <div>
-                <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Label</p>
-                <TextInput value={newAlarmLabel} onChange={setNewAlarmLabel} placeholder="e.g. Bedtime, Wake up" />
-              </div>
-
-              <div>
-                <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Repeat</p>
-                <div className="flex gap-1.5">
-                  {DAYS.map(d => {
-                    const active = newAlarmDays.includes(d)
-                    return (
-                      <button
-                        key={d}
-                        onClick={() => toggleAlarmDay(d)}
-                        className="flex-1 h-9 rounded-xl text-xs font-bold transition-all"
-                        style={{
-                          background: active ? 'var(--green)' : 'var(--surface-2)',
-                          color: active ? '#000' : 'var(--text-3)',
-                          border: `1px solid ${active ? 'var(--green)' : 'var(--border-2)'}`,
-                        }}
-                      >
-                        {DAY_LABELS[d]}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div
-                className="flex items-center justify-between px-3 py-3 rounded-xl"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)' }}
-              >
-                <div className="flex items-center gap-2">
-                  <QrCode size={13} style={{ color: 'var(--text-2)' }} />
-                  <span className="text-sm" style={{ color: 'var(--text)' }}>Require QR to dismiss</span>
-                </div>
-                <Toggle on={newAlarmQr} onChange={setNewAlarmQr} />
-              </div>
-
-              <SaveButton onClick={addAlarm} loading={loading} label="Set Alarm" disabled={!newAlarmTime || newAlarmDays.length === 0} />
-            </div>
-          ) : (
-            <button
-              onClick={() => {
-                setNewAlarmLabel('Bedtime')
-                setNewAlarmTime('22:30')
-                setNewAlarmDays(['mon','tue','wed','thu','fri','sat','sun'])
-                setNewAlarmQr(false)
-                setModal('addAlarm')
-                // Scroll to page bottom — pb-28 on the container gives 112px clearance above the nav bar
-                setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 80)
-              }}
-              className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
-              style={{ borderTop: '1px solid var(--border)', color: 'var(--green)' }}
-            >
-              <Plus size={16} />
-              <span className="text-sm font-medium">Add Alarm</span>
-            </button>
-          )}
         </Section>
 
         {/* ── Section 5: Appearance ── */}

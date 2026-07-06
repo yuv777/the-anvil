@@ -1,6 +1,5 @@
 import { Capacitor } from '@capacitor/core'
 
-// Dynamically import so the web build doesn't break
 async function getPlugin() {
   if (!Capacitor.isNativePlatform()) return null
   const { LocalNotifications } = await import('@capacitor/local-notifications')
@@ -20,42 +19,10 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return display === 'granted'
 }
 
-export async function scheduleAlarmNotification(opts: {
-  id: number
-  title: string
-  body: string
-  at: Date
-  qrDismiss: boolean
-}) {
-  const plugin = await getPlugin()
-  if (!plugin) return
-
-  await plugin.schedule({
-    notifications: [{
-      id: opts.id,
-      title: opts.title,
-      body: opts.body,
-      schedule: { at: opts.at, allowWhileIdle: true },
-      sound: 'default',
-      extra: { qrDismiss: opts.qrDismiss },
-      actionTypeId: opts.qrDismiss ? 'QR_DISMISS' : '',
-    }],
-  })
-}
-
 export async function cancelNotification(id: number) {
   const plugin = await getPlugin()
   if (!plugin) return
   await plugin.cancel({ notifications: [{ id }] })
-}
-
-export async function cancelAllNotifications() {
-  const plugin = await getPlugin()
-  if (!plugin) return
-  const pending = await plugin.getPending()
-  if (pending.notifications.length > 0) {
-    await plugin.cancel({ notifications: pending.notifications.map(n => ({ id: n.id })) })
-  }
 }
 
 export async function scheduleTaskReminder(remainingCount: number, remindAt: Date) {
@@ -64,7 +31,6 @@ export async function scheduleTaskReminder(remainingCount: number, remindAt: Dat
 
   if (!plugin) return
 
-  // Cancel existing reminder first
   await plugin.cancel({ notifications: [{ id: REMINDER_ID }] })
 
   if (remainingCount <= 0) return
@@ -79,20 +45,5 @@ export async function scheduleTaskReminder(remainingCount: number, remindAt: Dat
       schedule: { at: remindAt, allowWhileIdle: true },
       sound: 'default',
     }],
-  })
-}
-
-export async function setupNotificationListeners() {
-  const plugin = await getPlugin()
-  if (!plugin) return
-
-  // Fires when user taps any local notification
-  await plugin.addListener('localNotificationActionPerformed', (action) => {
-    const id = action.notification.id
-    const extra = action.notification.extra as { qrDismiss?: boolean } | undefined
-    // Alarm notifications are IDs 1000-1999
-    if (id >= 1000 && id < 2000) {
-      window.location.href = extra?.qrDismiss ? '/alarm-dismiss?qr=1' : '/alarm-dismiss'
-    }
   })
 }

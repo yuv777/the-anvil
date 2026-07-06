@@ -34,8 +34,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'journal_7',        name: 'The Writer',       desc: 'Write a journal entry 7 days in a row',     icon: '📔', rarity: 'rare'      },
   { id: 'program_complete', name: 'Graduate',         desc: 'Complete a full challenge program',         icon: '🎓', rarity: 'rare'      },
   { id: 'share_card',       name: 'Inspired Others',  desc: 'Share your streak card',                    icon: '🌟', rarity: 'common'    },
-  { id: 'night_owl',        name: 'Night Owl',        desc: 'Set a sleep alarm',                         icon: '🦉', rarity: 'common'    },
-  { id: 'tier_2',           name: 'Steel Forged',     desc: 'Reach Steel tier overall',                  icon: '🔩', rarity: 'common'    },
+{ id: 'tier_2',           name: 'Steel Forged',     desc: 'Reach Steel tier overall',                  icon: '🔩', rarity: 'common'    },
   { id: 'tier_3',           name: 'Bronze Warrior',   desc: 'Reach Bronze tier overall',                 icon: '🛡️', rarity: 'rare'      },
   { id: 'tier_4',           name: 'Gold Elite',       desc: 'Reach Gold tier overall',                   icon: '🏅', rarity: 'epic'      },
 ]

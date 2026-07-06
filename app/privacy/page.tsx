@@ -25,8 +25,7 @@ export default function PrivacyPage() {
             'Journal entries — text you write in the in-app journal.',
             'Body metrics — weight, sleep, water, and mood data you manually enter.',
             'Progress photos — images you upload to the progress photos feature.',
-            'Sleep alarm settings — times and days you configure for sleep reminders.',
-          ],
+],
         },
         {
           heading: '3. Data We Do NOT Collect',
