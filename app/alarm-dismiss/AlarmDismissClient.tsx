@@ -15,6 +15,10 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
   const [dismissed, setDismissed] = useState(false)
   const [cameraError, setCameraError] = useState(false)
   const [time, setTime] = useState('')
+  const [showEmergency, setShowEmergency] = useState(false)
+  const [holdProgress, setHoldProgress] = useState(0)
+  const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const holdStart = useRef<number>(0)
 
   // Live clock
   useEffect(() => {
@@ -165,11 +169,73 @@ export default function AlarmDismissClient({ userId }: { userId: string }) {
 
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Footer hint */}
-      <div className="pb-14 text-center">
-        <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-          Find your QR code in Settings → Sleep Alarms
-        </p>
+      {/* Footer */}
+      <div className="pb-14 flex flex-col items-center gap-4">
+        {!showEmergency ? (
+          <button
+            onClick={() => setShowEmergency(true)}
+            className="text-xs underline"
+            style={{ color: 'var(--text-3)' }}
+          >
+            Lost your QR code? Emergency dismiss
+          </button>
+        ) : (
+          <div className="flex flex-col items-center gap-3 px-8 w-full">
+            <p className="text-xs text-center" style={{ color: '#f87171' }}>
+              Emergency dismiss — hold the button for 3 seconds
+            </p>
+            <div className="relative w-full max-w-xs" style={{ height: 52 }}>
+              {/* Progress fill */}
+              <div
+                className="absolute inset-0 rounded-2xl transition-none"
+                style={{
+                  background: '#f87171',
+                  width: `${holdProgress}%`,
+                  borderRadius: 16,
+                  opacity: 0.25,
+                }}
+              />
+              <button
+                onPointerDown={() => {
+                  holdStart.current = Date.now()
+                  holdTimer.current = setInterval(() => {
+                    const elapsed = Date.now() - holdStart.current
+                    const pct = Math.min(100, (elapsed / 3000) * 100)
+                    setHoldProgress(pct)
+                    if (pct >= 100) {
+                      if (holdTimer.current) clearInterval(holdTimer.current)
+                      dismiss()
+                    }
+                  }, 30)
+                }}
+                onPointerUp={() => {
+                  if (holdTimer.current) clearInterval(holdTimer.current)
+                  setHoldProgress(0)
+                }}
+                onPointerLeave={() => {
+                  if (holdTimer.current) clearInterval(holdTimer.current)
+                  setHoldProgress(0)
+                }}
+                className="absolute inset-0 w-full h-full rounded-2xl font-bold text-sm"
+                style={{ background: 'transparent', border: '1px solid #f87171', color: '#f87171' }}
+              >
+                Hold to dismiss
+              </button>
+            </div>
+            <button
+              onClick={() => { setShowEmergency(false); setHoldProgress(0) }}
+              className="text-xs"
+              style={{ color: 'var(--text-3)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+        {!showEmergency && (
+          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
+            Find your QR code in Settings → Sleep Alarms
+          </p>
+        )}
       </div>
     </div>
   )
