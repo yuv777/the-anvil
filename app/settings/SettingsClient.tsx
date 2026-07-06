@@ -10,7 +10,6 @@ import {
   ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen, Moon, QrCode,
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
-import TimePicker from '@/app/components/TimePicker'
 import { cancelNotification, scheduleTaskReminder, requestNotificationPermission } from '@/lib/notifications'
 
 // ─── Constants ────────────────────────────────────────────────
@@ -1186,10 +1185,16 @@ export default function SettingsClient({
           <ModalHeader title="New Alarm" onClose={closeModal} />
 
           <div className="space-y-4">
-            {/* Time picker */}
+            {/* Time */}
             <div>
-              <p className="text-xs mb-3" style={{ color: 'var(--text-3)' }}>Time</p>
-              <TimePicker value={newAlarmTime} onChange={setNewAlarmTime} />
+              <p className="text-xs mb-2" style={{ color: 'var(--text-3)' }}>Time</p>
+              <input
+                type="time"
+                value={newAlarmTime}
+                onChange={e => setNewAlarmTime(e.target.value)}
+                className="w-full px-4 py-3.5 rounded-xl text-sm focus:outline-none"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)', fontSize: 18 }}
+              />
             </div>
 
             {/* Label */}
