@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { format, subDays, startOfMonth, endOfMonth, eachDayOfInterval, getDay, startOfWeek, endOfWeek, eachDayOfInterval as eachDay } from 'date-fns'
-import { CheckCircle2, Flame, Star, TrendingUp, ChevronLeft, ChevronRight, Camera, X, Maximize2 } from 'lucide-react'
+import { CheckCircle2, Flame, Star, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, CartesianGrid,
@@ -85,40 +85,6 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
   const [mood, setMood]       = useState<number>(todayMetric?.mood ?? 0)
   const [savingMetrics, setSavingMetrics] = useState(false)
   const [metricsSaved, setMetricsSaved]   = useState(false)
-
-  // ── Progress photos state ──
-  interface ProgressPhoto { id: string; date: string; label: string; url: string }
-  const [photos, setPhotos] = useState<ProgressPhoto[]>([])
-  const [photoLabel, setPhotoLabel] = useState('')
-  const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [lightboxPhoto, setLightboxPhoto] = useState<ProgressPhoto | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    async function loadPhotos() {
-      const supabase = createClient()
-      const { data } = await supabase.from('progress_photos').select('*').eq('user_id', userId).order('date', { ascending: false })
-      if (data) setPhotos(data as ProgressPhoto[])
-    }
-    loadPhotos()
-  }, [userId])
-
-  async function uploadPhoto(file: File) {
-    setUploadingPhoto(true)
-    const supabase = createClient()
-    const ext = file.name.split('.').pop() || 'jpg'
-    const path = `${userId}/${Date.now()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('progress-photos').upload(path, file)
-    if (upErr) { setUploadingPhoto(false); return }
-    const { data: urlData } = supabase.storage.from('progress-photos').getPublicUrl(path)
-    const dateStr = format(new Date(), 'yyyy-MM-dd')
-    const { data: row } = await supabase.from('progress_photos')
-      .insert({ user_id: userId, date: dateStr, label: photoLabel.trim() || dateStr, url: urlData.publicUrl })
-      .select().single()
-    if (row) setPhotos(prev => [row as ProgressPhoto, ...prev])
-    setPhotoLabel('')
-    setUploadingPhoto(false)
-  }
 
   async function saveMetrics() {
     setSavingMetrics(true)
@@ -381,65 +347,6 @@ export default function AnalyticsClient({ recentTasks, allTasks, streak, skillRo
               </div>
             )}
 
-            {/* Progress Photos */}
-            <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
-              <h2 className="text-xs uppercase tracking-widest mb-4" style={{ color: 'var(--text-3)' }}>Progress Photos</h2>
-              <div className="space-y-3 mb-4">
-                <div>
-                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Label (optional)</label>
-                  <input value={photoLabel} onChange={e => setPhotoLabel(e.target.value)} placeholder={`Front — ${format(new Date(), 'MMM d')}`}
-                    className="w-full px-3 py-2.5 rounded-xl text-sm focus:outline-none"
-                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }} />
-                </div>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f) }} />
-                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingPhoto}
-                  className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-40"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }}>
-                  <Camera size={15} />
-                  {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
-                </button>
-              </div>
-
-              {photos.length > 0 ? (
-                <div className="grid grid-cols-3 gap-2">
-                  {photos.map(photo => (
-                    <button key={photo.id} onClick={() => setLightboxPhoto(photo)}
-                      className="aspect-square rounded-xl overflow-hidden relative group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.label} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <Maximize2 size={16} className="text-white" />
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 px-1.5 py-1 text-[9px] font-medium truncate"
-                        style={{ background: 'rgba(0,0,0,0.65)', color: '#fff' }}>
-                        {photo.label}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-xs py-4" style={{ color: 'var(--text-3)' }}>No photos yet. Upload your first progress photo.</p>
-              )}
-            </div>
-
-            {/* Lightbox */}
-            {lightboxPhoto && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.92)' }}
-                onClick={() => setLightboxPhoto(null)}>
-                <button className="absolute top-5 right-5 p-2 rounded-full" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>
-                  <X size={18} />
-                </button>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={lightboxPhoto.url} alt={lightboxPhoto.label}
-                  className="max-w-full max-h-full rounded-2xl object-contain"
-                  onClick={e => e.stopPropagation()} />
-                <div className="absolute bottom-6 text-center">
-                  <p className="text-sm font-semibold text-white">{lightboxPhoto.label}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.5)' }}>{lightboxPhoto.date}</p>
-                </div>
-              </div>
-            )}
           </div>
         )}
 

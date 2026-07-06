@@ -10,19 +10,6 @@ import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
 import { scheduleTaskReminder, cancelNotification, requestNotificationPermission } from '@/lib/notifications'
-import { updateWidget, CategoryWidgetInfo } from '@/lib/widget'
-
-const TASK_CATEGORIES = ['physical', 'mental', 'confidence', 'spiritual', 'lifestyle'] as const
-
-function catBreakdown(tasks: Task[]): CategoryWidgetInfo[] {
-  return TASK_CATEGORIES
-    .map(cat => ({
-      name: cat,
-      completed: tasks.filter(t => t.category === cat && t.completed).length,
-      total: tasks.filter(t => t.category === cat).length,
-    }))
-    .filter(c => c.total > 0)
-}
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
 const TIER_COLORS = ['', '#9ca3af', '#94a3b8', '#c97316', '#c9a227']
@@ -116,18 +103,14 @@ export default function DashboardClient({
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
   const allDone = completedCount === totalCount && totalCount > 0
 
-  // Load UI prefs from localStorage, request notification permission, push initial widget data
+  // Load UI prefs from localStorage, request notification permission
   useEffect(() => {
     setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
     requestNotificationPermission().catch(() => {})
-    updateWidget(
-      initialTasks.filter(t => t.completed).length,
-      initialTasks.length,
-      catBreakdown(initialTasks)
-    ).catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Schedule / cancel task reminder based on user prefs
+  // Ensure the daily repeating reminder is scheduled according to user prefs.
+  // Runs once on mount — the notification repeats daily automatically.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const enabled = localStorage.getItem('taskReminderEnabled') !== 'false'
@@ -139,10 +122,9 @@ export default function DashboardClient({
     const [rh, rm] = timeStr.split(':').map(Number)
     const remindAt = new Date()
     remindAt.setHours(rh, rm, 0, 0)
-    // If the time has already passed today, schedule for tomorrow
     if (remindAt <= new Date()) remindAt.setDate(remindAt.getDate() + 1)
-    scheduleTaskReminder(totalCount - completedCount, remindAt).catch(() => {})
-  }, [completedCount, totalCount])
+    scheduleTaskReminder(remindAt).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = new Date().toISOString().split('T')[0]
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0]
@@ -210,9 +192,6 @@ export default function DashboardClient({
       t.dailyTaskId === task.dailyTaskId ? { ...t, completed: newCompleted } : t
     )
     setTasks(updatedTasks)
-    // Keep lock screen widget in sync
-    const newCompleted2 = updatedTasks.filter(t => t.completed).length
-    updateWidget(newCompleted2, updatedTasks.length, catBreakdown(updatedTasks)).catch(() => {})
     if (newCompleted) {
       Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {})
       const isPerfectDay = updatedTasks.filter(t => t.completed).length === totalCount

@@ -25,7 +25,9 @@ export async function cancelNotification(id: number) {
   await plugin.cancel({ notifications: [{ id }] })
 }
 
-export async function scheduleTaskReminder(remainingCount: number, remindAt: Date) {
+// Schedules a daily repeating reminder at the given time.
+// Fires every day at the same time-of-day without needing the app to be open.
+export async function scheduleTaskReminder(remindAt: Date) {
   const plugin = await getPlugin()
   const REMINDER_ID = 9999
 
@@ -33,16 +35,12 @@ export async function scheduleTaskReminder(remainingCount: number, remindAt: Dat
 
   await plugin.cancel({ notifications: [{ id: REMINDER_ID }] })
 
-  if (remainingCount <= 0) return
-
   await plugin.schedule({
     notifications: [{
       id: REMINDER_ID,
       title: 'The Anvil',
-      body: remainingCount === 1
-        ? '1 task remaining — finish strong today'
-        : `${remainingCount} tasks remaining — don't break the streak`,
-      schedule: { at: remindAt, allowWhileIdle: true },
+      body: "Don't break the streak — complete today's tasks",
+      schedule: { at: remindAt, repeats: true, every: 'day', allowWhileIdle: true },
       sound: 'default',
     }],
   })

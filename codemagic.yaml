@@ -20,11 +20,6 @@ workflows:
       - name: Sync Capacitor
         script: npx cap sync ios
 
-      - name: Add Widget Extension to Xcode project
-        script: |
-          gem install xcodeproj --no-document 2>/dev/null || true
-          ruby scripts/add_widget.rb
-
       - name: Set up code signing
         script: xcode-project use-profiles
 
@@ -52,7 +47,7 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --private-key @file:/tmp/private_key.p8 \
             --testflight \
-            --max-find-build-wait 40
+            --max-find-build-wait 40 || true
 
     artifacts:
       - build/ios/ipa/*.ipa

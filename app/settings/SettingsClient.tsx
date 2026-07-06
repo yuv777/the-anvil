@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase'
 import BottomNav from '@/app/components/BottomNav'
 import {
   User, Lock, Sliders, Bell, Palette, Shield, Info,
-  ChevronRight, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen,
+  ChevronRight, ChevronLeft, X, Eye, EyeOff, Check, AlertTriangle, Download, Plus, Trash2, BookOpen,
 } from 'lucide-react'
 import { useTheme, THEMES, type ThemeId } from '@/app/hooks/useTheme'
 import { cancelNotification, scheduleTaskReminder, requestNotificationPermission } from '@/lib/notifications'
@@ -107,28 +107,6 @@ function Toast({ message, type, onDismiss }: { message: string; type: 'success' 
   )
 }
 
-function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.75)' }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 space-y-4"
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          maxHeight: '88vh',
-          overflowY: 'auto',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
   return (
@@ -231,11 +209,15 @@ function TextInput({ value, onChange, placeholder, type = 'text', autoFocus }: {
   )
 }
 
-function ModalHeader({ title, onClose }: { title: string; onClose: () => void }) {
+
+function InlinePanel({ children, className = 'px-4 pb-4 space-y-3' }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <h3 className="text-sm font-bold" style={{ color: 'var(--text)' }}>{title}</h3>
-      <button onClick={onClose}><X size={17} style={{ color: 'var(--text-3)' }} /></button>
+    <div
+      ref={el => el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })}
+      className={className}
+      style={{ borderTop: '1px solid var(--border)' }}
+    >
+      {children}
     </div>
   )
 }
@@ -327,7 +309,7 @@ export default function SettingsClient({
     if (remindAt <= new Date()) remindAt.setDate(remindAt.getDate() + 1)
     // We don't know task count here; schedule with a generic message
     requestNotificationPermission()
-      .then(() => scheduleTaskReminder(1, remindAt))
+      .then(() => scheduleTaskReminder(remindAt))
       .catch(() => {})
   }
 
@@ -360,10 +342,8 @@ export default function SettingsClient({
     setTimeout(() => setToast(null), 3500)
   }
 
-  // ── modal ──
-  const [modal, setModal]             = useState<string | null>(null)
-  const [resetCategory, setResetCat] = useState<string | null>(null)
-  const [selectedTier, setSelTier]   = useState<number | null>(null)
+  // ── inline expansion (replaces modals) ──
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   // ── form fields ──
   const [newDisplayName, setNewDisplayName] = useState('')
@@ -384,8 +364,8 @@ export default function SettingsClient({
   const [compactView, setCompactView]               = useState(false)
   const [showProgressWidget, setShowProgressWidget] = useState(false)
 
-  function openModal(name: string) {
-    setModal(name)
+  function expand(name: string) {
+    setExpanded(prev => prev === name ? null : name)
     setNewDisplayName(displayName)
     setNewUsername(username)
     setNewEmail('')
@@ -394,11 +374,13 @@ export default function SettingsClient({
     setLoading(false)
   }
 
-  function closeModal() {
-    setModal(null)
-    setResetCat(null)
-    setSelTier(null)
+  function collapse() {
+    setExpanded(null)
   }
+
+  // legacy alias used by save handlers
+  const closeModal = collapse
+  const modal = expanded
 
   // ── handlers ──
 
@@ -460,42 +442,25 @@ export default function SettingsClient({
     showToast('Password updated')
   }
 
-  async function saveSkillReset() {
-    if (!resetCategory || selectedTier === null) return
-    setLoading(true)
-    const col = `${resetCategory}_tier` as string
-    const tier = selectedTier  // capture before any state changes
-    const cat  = resetCategory
+  async function cycleSkill(category: string, delta: number) {
+    const current = skillLevels.find(s => s.category === category)?.current_tier ?? 1
+    const next = Math.max(1, Math.min(4, current + delta))
+    if (next === current) return
 
-    const { data, error } = await supabase
+    setSkillLevels(prev => prev.map(s => s.category === category ? { ...s, current_tier: next } : s))
+
+    const row: Record<string, unknown> = { user_id: userId }
+    for (const s of skillLevels) {
+      row[`${s.category}_tier`] = s.category === category ? next : s.current_tier
+    }
+    const { error } = await supabase
       .from('user_skill_levels')
-      .update({ [col]: tier })
-      .eq('user_id', userId)
-      .select('user_id')
-
-    setLoading(false)
+      .upsert(row, { onConflict: 'user_id' })
 
     if (error) {
-      console.error('skill reset error:', error)
+      setSkillLevels(prev => prev.map(s => s.category === category ? { ...s, current_tier: current } : s))
       showToast(error.message, 'error')
-      return
     }
-
-    if (!data || data.length === 0) {
-      // No row existed yet — insert one
-      const { error: insertError } = await supabase
-        .from('user_skill_levels')
-        .insert({ user_id: userId, [col]: tier })
-      if (insertError) {
-        console.error('skill insert error:', insertError)
-        showToast(insertError.message, 'error')
-        return
-      }
-    }
-
-    setSkillLevels(prev => prev.map(s => s.category === cat ? { ...s, current_tier: tier } : s))
-    closeModal()
-    showToast(`${cat.charAt(0).toUpperCase() + cat.slice(1)} tier updated`)
   }
 
   async function exportData() {
@@ -592,14 +557,92 @@ export default function SettingsClient({
 
         {/* ── Section 1: Profile ── */}
         <Section title="Profile" icon={User}>
-          <SettingRow label="Display Name" value={displayName} onClick={() => openModal('displayName')} />
-          <SettingRow label="Username" value={`@${username}`} onClick={() => openModal('username')} />
-          <SettingRow label="Email" value={maskEmail(email)} onClick={() => openModal('email')} last />
+          {/* Display Name */}
+          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--border)', minHeight: 52 }}>
+            <span className="text-sm shrink-0" style={{ color: 'var(--text)', width: 100 }}>Display Name</span>
+            {expanded === 'displayName' ? (
+              <>
+                <input autoFocus value={newDisplayName} onChange={e => setNewDisplayName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveDisplayName()}
+                  placeholder="Your name" className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm focus:outline-none"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }} />
+                <button onClick={saveDisplayName} disabled={loading || !newDisplayName.trim()} className="shrink-0 disabled:opacity-40"><Check size={16} style={{ color: 'var(--green)' }} /></button>
+                <button onClick={collapse} className="shrink-0"><X size={14} style={{ color: 'var(--text-3)' }} /></button>
+              </>
+            ) : (
+              <button className="flex flex-1 items-center justify-end gap-2 text-left" onClick={() => expand('displayName')}>
+                <span className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{displayName}</span>
+                <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+              </button>
+            )}
+          </div>
+          {/* Username */}
+          <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: '1px solid var(--border)', minHeight: 52 }}>
+            <span className="text-sm shrink-0" style={{ color: 'var(--text)', width: 100 }}>Username</span>
+            {expanded === 'username' ? (
+              <>
+                <input autoFocus value={newUsername} onChange={e => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && saveUsername()}
+                  placeholder="username" className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm focus:outline-none"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }} />
+                <button onClick={saveUsername} disabled={loading || !newUsername.trim()} className="shrink-0 disabled:opacity-40"><Check size={16} style={{ color: 'var(--green)' }} /></button>
+                <button onClick={collapse} className="shrink-0"><X size={14} style={{ color: 'var(--text-3)' }} /></button>
+              </>
+            ) : (
+              <button className="flex flex-1 items-center justify-end gap-2 text-left" onClick={() => expand('username')}>
+                <span className="text-xs truncate" style={{ color: 'var(--text-3)' }}>@{username}</span>
+                <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+              </button>
+            )}
+          </div>
+          {/* Email */}
+          <div className="flex items-center gap-2 px-4 py-3" style={{ minHeight: 52 }}>
+            <span className="text-sm shrink-0" style={{ color: 'var(--text)', width: 100 }}>Email</span>
+            {expanded === 'email' ? (
+              <>
+                <input autoFocus type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && saveEmail()}
+                  placeholder="new@email.com" className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-sm focus:outline-none"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text)' }} />
+                <button onClick={saveEmail} disabled={loading || !newEmail.trim()} className="shrink-0 disabled:opacity-40"><Check size={16} style={{ color: 'var(--green)' }} /></button>
+                <button onClick={collapse} className="shrink-0"><X size={14} style={{ color: 'var(--text-3)' }} /></button>
+              </>
+            ) : (
+              <button className="flex flex-1 items-center justify-end gap-2 text-left" onClick={() => expand('email')}>
+                <span className="text-xs truncate" style={{ color: 'var(--text-3)' }}>{maskEmail(email)}</span>
+                <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
+              </button>
+            )}
+          </div>
         </Section>
 
         {/* ── Section 2: Password & Security ── */}
         <Section title="Password & Security" icon={Lock}>
-          <SettingRow label="Change Password" onClick={() => openModal('password')} />
+          {/* Change Password */}
+          <div style={{ borderBottom: '1px solid var(--border)' }}>
+            <button className="w-full flex items-center justify-between px-4 py-3.5 text-left" onClick={() => expand('password')}>
+              <span className="text-sm" style={{ color: 'var(--text)' }}>Change Password</span>
+              {expanded === 'password' ? <X size={13} style={{ color: 'var(--text-3)' }} /> : <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />}
+            </button>
+            {expanded === 'password' && (
+              <InlinePanel>
+                <PasswordInput value={newPw} onChange={setNewPw} placeholder="New password" />
+                {newPw.length > 0 && (
+                  <div>
+                    <div className="flex gap-1 mb-1">
+                      {[1, 2, 3, 4].map(i => (
+                        <div key={i} className="flex-1 rounded-full transition-colors"
+                          style={{ height: 2, background: i <= strength.score ? strength.color : 'var(--border-2)' }} />
+                      ))}
+                    </div>
+                    <p className="text-xs" style={{ color: strength.color }}>{strength.label}</p>
+                  </div>
+                )}
+                <PasswordInput value={confirmPw} onChange={setConfirmPw} placeholder="Confirm new password" />
+                <SaveButton onClick={savePassword} loading={loading} label="Update Password" disabled={!newPw || !confirmPw} />
+              </InlinePanel>
+            )}
+          </div>
           <SettingRow label="Two-Factor Authentication" last>
             <span className="text-xs px-2 py-0.5 rounded-md" style={{ background: 'var(--border)', color: 'var(--text-3)' }}>
               Coming soon
@@ -610,25 +653,25 @@ export default function SettingsClient({
         {/* ── Section 3: Skill Levels ── */}
         <Section title="Skill Levels" icon={Sliders}>
           {skillLevels.map((skill, i) => (
-            <div
-              key={skill.category}
-              className="px-4 py-3.5 flex items-center justify-between"
-              style={{ borderBottom: i < skillLevels.length - 1 ? '1px solid var(--border)' : 'none' }}
-            >
+            <div key={skill.category} className="flex items-center justify-between px-4 py-3.5"
+              style={{ borderBottom: i < skillLevels.length - 1 ? '1px solid var(--border)' : 'none' }}>
               <div className="flex items-center gap-2.5">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: CATEGORY_COLORS[skill.category] }} />
                 <span className="text-sm capitalize" style={{ color: 'var(--text)' }}>{skill.category}</span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold" style={{ color: TIER_COLORS[skill.current_tier] || TIER_COLORS[1] }}>
+              <div className="flex items-center gap-0.5">
+                <button onClick={() => cycleSkill(skill.category, -1)} disabled={skill.current_tier <= 1}
+                  className="p-1.5 rounded-lg disabled:opacity-25 transition-opacity"
+                  style={{ color: 'var(--text-3)' }}>
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-xs font-bold w-14 text-center" style={{ color: TIER_COLORS[skill.current_tier] || TIER_COLORS[1] }}>
                   {TIER_LABELS[skill.current_tier] || 'Iron'}
                 </span>
-                <button
-                  onClick={() => { setResetCat(skill.category); setSelTier(null); setModal('skillReset') }}
-                  className="text-xs px-2.5 py-1 rounded-lg font-medium"
-                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border-2)', color: 'var(--text-2)' }}
-                >
-                  Reset
+                <button onClick={() => cycleSkill(skill.category, 1)} disabled={skill.current_tier >= 4}
+                  className="p-1.5 rounded-lg disabled:opacity-25 transition-opacity"
+                  style={{ color: 'var(--text-3)' }}>
+                  <ChevronRight size={14} />
                 </button>
               </div>
             </div>
@@ -753,14 +796,48 @@ export default function SettingsClient({
               </div>
             ))
           )}
-          <button
-            onClick={() => { setNewHabitName(''); setNewHabitDesc(''); setNewHabitCat('physical'); openModal('addHabit') }}
-            className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
-            style={{ color: 'var(--green)' }}
-          >
-            <Plus size={16} />
-            <span className="text-sm font-medium">Add Custom Habit</span>
-          </button>
+          <div>
+            <button
+              onClick={() => { setNewHabitName(''); setNewHabitDesc(''); setNewHabitCat('physical'); setExpanded(prev => prev === 'addHabit' ? null : 'addHabit') }}
+              className="flex items-center gap-2 px-4 py-3.5 w-full text-left"
+              style={{ color: expanded === 'addHabit' ? 'var(--text-3)' : 'var(--green)', borderTop: customHabits.length > 0 ? '1px solid var(--border)' : 'none' }}
+            >
+              {expanded === 'addHabit' ? <X size={16} /> : <Plus size={16} />}
+              <span className="text-sm font-medium">{expanded === 'addHabit' ? 'Cancel' : 'Add Custom Habit'}</span>
+            </button>
+            {expanded === 'addHabit' && (
+              <InlinePanel>
+                <div>
+                  <p className="text-xs mb-1.5 pt-1" style={{ color: 'var(--text-3)' }}>Category</p>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {['physical', 'mental', 'confidence', 'spiritual', 'lifestyle'].map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setNewHabitCat(cat)}
+                        className="py-2 rounded-xl text-[11px] font-semibold capitalize transition-colors"
+                        style={{
+                          background: newHabitCat === cat ? 'rgba(34,197,94,0.08)' : 'var(--surface-2)',
+                          border: `1px solid ${newHabitCat === cat ? 'rgba(34,197,94,0.3)' : 'var(--border-2)'}`,
+                          color: newHabitCat === cat ? 'var(--green)' : 'var(--text-2)',
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Habit name</p>
+                  <TextInput value={newHabitName} onChange={setNewHabitName} placeholder="e.g. Cold shower" autoFocus />
+                </div>
+                <div>
+                  <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Description / target (optional)</p>
+                  <TextInput value={newHabitDesc} onChange={setNewHabitDesc} placeholder="e.g. 3 minutes cold" />
+                </div>
+                <SaveButton onClick={addCustomHabit} loading={loading} label="Add Habit" disabled={!newHabitName.trim()} />
+              </InlinePanel>
+            )}
+          </div>
         </Section>
 
         {/* ── Section 6: Data & Privacy ── */}
@@ -789,7 +866,42 @@ export default function SettingsClient({
             <span className="text-sm" style={{ color: 'var(--text)' }}>Cookie Policy</span>
             <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />
           </Link>
-          <SettingRow label="Delete Account" onClick={() => openModal('delete')} danger last />
+          <div>
+            <button className="w-full flex items-center justify-between px-4 py-3.5 text-left" onClick={() => expand('delete')}>
+              <span className="text-sm" style={{ color: '#f87171' }}>Delete Account</span>
+              {expanded === 'delete' ? <X size={13} style={{ color: 'var(--text-3)' }} /> : <ChevronRight size={13} style={{ color: '#f87171' }} />}
+            </button>
+            {expanded === 'delete' && (
+              <InlinePanel>
+                <div className="flex items-center gap-2 pt-1" style={{ color: '#f87171' }}>
+                  <AlertTriangle size={14} />
+                  <span className="text-xs font-semibold">This cannot be undone</span>
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-2)' }}>
+                  Permanently deletes all your tasks, streaks, skill levels, and squad memberships.
+                </p>
+                <div>
+                  <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>
+                    Type <span className="font-bold" style={{ color: '#f87171' }}>DELETE</span> to confirm
+                  </p>
+                  <TextInput value={deleteText} onChange={setDeleteText} placeholder="DELETE" />
+                </div>
+                <PasswordInput value={deletePw} onChange={setDeletePw} placeholder="Your password" />
+                <button
+                  onClick={deleteAccount}
+                  disabled={loading || deleteText !== 'DELETE' || !deletePw}
+                  className="w-full py-3.5 rounded-xl font-bold text-sm transition-all disabled:opacity-40"
+                  style={{
+                    background: deleteText === 'DELETE' ? '#ef4444' : 'var(--surface-2)',
+                    color: deleteText === 'DELETE' ? '#fff' : 'var(--text-3)',
+                    border: deleteText === 'DELETE' ? 'none' : '1px solid var(--border-2)',
+                  }}
+                >
+                  {loading ? 'Deleting…' : 'Delete My Account'}
+                </button>
+              </InlinePanel>
+            )}
+          </div>
         </Section>
 
         {/* ── Section 7: About ── */}
@@ -813,210 +925,6 @@ export default function SettingsClient({
         </Section>
 
       </main>
-
-      {/* ══════════════════════════════════════════ MODALS ══ */}
-
-      {/* Display Name */}
-      {modal === 'displayName' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="Display Name" onClose={closeModal} />
-          <TextInput value={newDisplayName} onChange={setNewDisplayName} placeholder="Your name" autoFocus />
-          <SaveButton onClick={saveDisplayName} loading={loading} label="Save" disabled={!newDisplayName.trim()} />
-        </Modal>
-      )}
-
-      {/* Username */}
-      {modal === 'username' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="Change Username" onClose={closeModal} />
-          <div>
-            <TextInput
-              value={newUsername}
-              onChange={v => setNewUsername(v.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-              placeholder="username"
-              autoFocus
-            />
-            <p className="text-xs mt-1.5" style={{ color: 'var(--text-3)' }}>
-              Lowercase letters, numbers, and underscores only.
-            </p>
-          </div>
-          <SaveButton onClick={saveUsername} loading={loading} label="Save" disabled={!newUsername.trim()} />
-        </Modal>
-      )}
-
-      {/* Email */}
-      {modal === 'email' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="Change Email" onClose={closeModal} />
-          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-            A verification link will be sent to the new address. Your email won&apos;t change until you click it.
-          </p>
-          <TextInput type="email" value={newEmail} onChange={setNewEmail} placeholder="new@email.com" autoFocus />
-          <SaveButton onClick={saveEmail} loading={loading} label="Send Verification Email" disabled={!newEmail.trim()} />
-        </Modal>
-      )}
-
-      {/* Password */}
-      {modal === 'password' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="Change Password" onClose={closeModal} />
-          <div className="space-y-3">
-            <PasswordInput value={newPw} onChange={setNewPw} placeholder="New password" />
-            {newPw.length > 0 && (
-              <div>
-                <div className="flex gap-1 mb-1">
-                  {[1, 2, 3, 4].map(i => (
-                    <div
-                      key={i}
-                      className="flex-1 rounded-full transition-colors"
-                      style={{ height: 2, background: i <= strength.score ? strength.color : 'var(--border-2)' }}
-                    />
-                  ))}
-                </div>
-                <p className="text-xs" style={{ color: strength.color }}>{strength.label}</p>
-              </div>
-            )}
-            <PasswordInput value={confirmPw} onChange={setConfirmPw} placeholder="Confirm new password" />
-          </div>
-          <SaveButton onClick={savePassword} loading={loading} label="Update Password" disabled={!newPw || !confirmPw} />
-        </Modal>
-      )}
-
-      {/* Skill Reset */}
-      {modal === 'skillReset' && resetCategory && (
-        <Modal onClose={closeModal}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: CATEGORY_COLORS[resetCategory] }} />
-              <h3 className="text-sm font-bold capitalize" style={{ color: 'var(--text)' }}>{resetCategory}</h3>
-            </div>
-            <button onClick={closeModal}><X size={17} style={{ color: 'var(--text-3)' }} /></button>
-          </div>
-
-          <p className="text-sm" style={{ color: 'var(--text-2)' }}>
-            {SKILL_QUESTIONS[resetCategory].question}
-          </p>
-
-          <div className="space-y-2">
-            {SKILL_QUESTIONS[resetCategory].options.map(opt => (
-              <button
-                key={opt.tier}
-                onClick={() => setSelTier(opt.tier)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm text-left transition-colors"
-                style={{
-                  background: selectedTier === opt.tier ? 'rgba(34,197,94,0.07)' : 'var(--surface-2)',
-                  border: `1px solid ${selectedTier === opt.tier ? 'rgba(34,197,94,0.3)' : 'var(--border-2)'}`,
-                  color: selectedTier === opt.tier ? 'var(--green)' : 'var(--text)',
-                }}
-              >
-                <span>{opt.label}</span>
-                <span className="text-xs font-semibold" style={{ color: TIER_COLORS[opt.tier] }}>
-                  {TIER_LABELS[opt.tier]}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <p className="text-xs" style={{ color: 'var(--text-3)' }}>
-            Only your starting tier changes. Streaks and history are not affected.
-          </p>
-
-          <button
-            onClick={saveSkillReset}
-            disabled={loading || selectedTier === null}
-            className="w-full py-3.5 rounded-xl font-bold text-sm disabled:opacity-40 transition-opacity"
-            style={{ background: 'var(--green)', color: '#000' }}
-          >
-            {loading ? 'Saving…' : 'Confirm'}
-          </button>
-        </Modal>
-      )}
-
-      {/* Delete Account */}
-      {modal === 'delete' && (
-        <Modal onClose={closeModal}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2" style={{ color: '#f87171' }}>
-              <AlertTriangle size={15} />
-              <h3 className="text-sm font-bold">Delete Account</h3>
-            </div>
-            <button onClick={closeModal}><X size={17} style={{ color: 'var(--text-3)' }} /></button>
-          </div>
-
-          <p className="text-sm" style={{ color: 'var(--text-2)' }}>
-            This permanently deletes all your tasks, streaks, skill levels, and squad memberships. There is no going back.
-          </p>
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>
-                Type <span className="font-bold" style={{ color: '#f87171' }}>DELETE</span> to confirm
-              </p>
-              <TextInput
-                value={deleteText}
-                onChange={setDeleteText}
-                placeholder="DELETE"
-              />
-            </div>
-            <PasswordInput value={deletePw} onChange={setDeletePw} placeholder="Your password" />
-          </div>
-
-          <button
-            onClick={deleteAccount}
-            disabled={loading || deleteText !== 'DELETE' || !deletePw}
-            className="w-full py-3.5 rounded-xl font-bold text-sm transition-all disabled:opacity-40"
-            style={{
-              background: deleteText === 'DELETE' ? '#ef4444' : 'var(--surface-2)',
-              color: deleteText === 'DELETE' ? '#fff' : 'var(--text-3)',
-              border: deleteText === 'DELETE' ? 'none' : '1px solid var(--border-2)',
-            }}
-          >
-            {loading ? 'Deleting…' : 'Delete My Account'}
-          </button>
-        </Modal>
-      )}
-
-      {/* Add Custom Habit */}
-      {modal === 'addHabit' && (
-        <Modal onClose={closeModal}>
-          <ModalHeader title="Add Custom Habit" onClose={closeModal} />
-
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Category</p>
-              <div className="grid grid-cols-5 gap-1.5">
-                {['physical', 'mental', 'confidence', 'spiritual', 'lifestyle'].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setNewHabitCat(cat)}
-                    className="py-2 rounded-xl text-[11px] font-semibold capitalize transition-colors"
-                    style={{
-                      background: newHabitCat === cat ? 'rgba(34,197,94,0.08)' : 'var(--surface-2)',
-                      border: `1px solid ${newHabitCat === cat ? 'rgba(34,197,94,0.3)' : 'var(--border-2)'}`,
-                      color: newHabitCat === cat ? 'var(--green)' : 'var(--text-2)',
-                    }}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Habit name</p>
-              <TextInput value={newHabitName} onChange={setNewHabitName} placeholder="e.g. Cold shower" autoFocus />
-            </div>
-
-            <div>
-              <p className="text-xs mb-1.5" style={{ color: 'var(--text-3)' }}>Description / target (optional)</p>
-              <TextInput value={newHabitDesc} onChange={setNewHabitDesc} placeholder="e.g. 3 minutes cold" />
-            </div>
-          </div>
-
-          <SaveButton onClick={addCustomHabit} loading={loading} label="Add Habit" disabled={!newHabitName.trim()} />
-        </Modal>
-      )}
-
 
       <BottomNav />
     </div>
