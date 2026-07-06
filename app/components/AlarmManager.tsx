@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase'
 import { scheduleAlarmNotification, setupNotificationListeners } from '@/lib/notifications'
 import { Capacitor } from '@capacitor/core'
 
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
 export default function AlarmManager() {
   const supabase = useMemo(() => createClient(), [])
   const router = useRouter()
@@ -18,6 +20,49 @@ export default function AlarmManager() {
     let alarms: any[] = []
     const firedKeys = new Set<string>()
     let lastCheckedMinute = ''
+
+    // Check if any alarm fired in the last 5 minutes and navigate if so.
+    // Used on app launch to handle the case where a background notification
+    // opened the app but the event listener missed the action event.
+    function checkFiringAlarm(alarmList: any[]) {
+      const now = new Date()
+      const currentDay = DAY_NAMES[now.getDay()]
+      const nowSecs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+
+      for (const alarm of alarmList) {
+        if (!alarm.enabled || !alarm.days?.includes(currentDay)) continue
+        const parts = alarm.alarm_time.split(':').map(Number)
+        const alarmSecs = parts[0] * 3600 + parts[1] * 60
+        const diff = nowSecs - alarmSecs
+        // Within 5 minutes after the alarm time
+        if (diff >= 0 && diff < 300) {
+          const navKey = `alarm-nav-${alarm.id}-${now.toDateString()}-${alarm.alarm_time}`
+          if (!localStorage.getItem(navKey)) {
+            localStorage.setItem(navKey, '1')
+            router.push(alarm.qr_dismiss ? '/alarm-dismiss?qr=1' : '/alarm-dismiss')
+            return
+          }
+        }
+      }
+    }
+
+    // Immediately check cached alarms so navigation happens before Supabase round-trip
+    try {
+      const cached = localStorage.getItem('anvil-alarms-cache')
+      if (cached) checkFiringAlarm(JSON.parse(cached))
+    } catch {}
+
+    // Re-check when app comes back to foreground (handles notification tap on backgrounded app)
+    function onVisibilityChange() {
+      if (!document.hidden) {
+        try {
+          const cached = localStorage.getItem('anvil-alarms-cache')
+          if (cached) checkFiringAlarm(JSON.parse(cached))
+        } catch {}
+        checkFiringAlarm(alarms)
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -38,6 +83,10 @@ export default function AlarmManager() {
         .eq('enabled', true)
 
       alarms = data || []
+      localStorage.setItem('anvil-alarms-cache', JSON.stringify(alarms))
+
+      // Check again with fresh data in case cache was stale
+      checkFiringAlarm(alarms)
 
       // Schedule all enabled alarms as native local notifications
       if (Capacitor.isNativePlatform()) {
@@ -46,8 +95,6 @@ export default function AlarmManager() {
     }
 
     init()
-
-    const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
     // Web fallback: in-app alarm check (when app is open)
     const interval = setInterval(() => {
@@ -95,6 +142,7 @@ export default function AlarmManager() {
     return () => {
       clearInterval(interval)
       clearInterval(refreshInterval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [supabase, router])
 
@@ -111,7 +159,6 @@ async function scheduleAllAlarms(alarms: any[]) {
     await LocalNotifications.cancel({ notifications: alarmNotifs.map(n => ({ id: n.id })) })
   }
 
-  const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
   const now = new Date()
 
   for (let i = 0; i < alarms.length; i++) {

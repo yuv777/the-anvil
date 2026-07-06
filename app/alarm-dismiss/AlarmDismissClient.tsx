@@ -17,6 +17,7 @@ export default function AlarmDismissClient({ userId, requireQr = false }: { user
   const [time, setTime] = useState('')
   const [showEmergency, setShowEmergency] = useState(false)
   const [holdProgress, setHoldProgress] = useState(0)
+  const [needsTap, setNeedsTap] = useState(false)
   const holdTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const holdStart = useRef<number>(0)
 
@@ -30,32 +31,68 @@ export default function AlarmDismissClient({ userId, requireQr = false }: { user
     return () => clearInterval(t)
   }, [])
 
-  // Alarm beep
+  // Alarm audio — triple-beep pattern repeating every 1.2s
   useEffect(() => {
     const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     const ctx = new AudioCtx()
     audioCtxRef.current = ctx
 
-    function beep() {
-      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') return
-      const osc = audioCtxRef.current.createOscillator()
-      const gain = audioCtxRef.current.createGain()
+    function scheduleBeep(t: number) {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
       osc.connect(gain)
-      gain.connect(audioCtxRef.current.destination)
+      gain.connect(ctx.destination)
       osc.type = 'square'
-      osc.frequency.setValueAtTime(880, audioCtxRef.current.currentTime)
-      osc.frequency.setValueAtTime(660, audioCtxRef.current.currentTime + 0.15)
-      gain.gain.setValueAtTime(0.25, audioCtxRef.current.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtxRef.current.currentTime + 0.35)
-      osc.start(audioCtxRef.current.currentTime)
-      osc.stop(audioCtxRef.current.currentTime + 0.35)
+      osc.frequency.value = 880
+      gain.gain.setValueAtTime(0.0001, t)
+      gain.gain.linearRampToValueAtTime(0.35, t + 0.01)
+      gain.gain.setValueAtTime(0.35, t + 0.12)
+      gain.gain.linearRampToValueAtTime(0.0001, t + 0.15)
+      osc.start(t)
+      osc.stop(t + 0.16)
     }
 
-    beep()
-    beepIntervalRef.current = setInterval(beep, 900)
+    function playPattern() {
+      if (!audioCtxRef.current || audioCtxRef.current.state !== 'running') return
+      const t = audioCtxRef.current.currentTime
+      scheduleBeep(t)
+      scheduleBeep(t + 0.23)
+      scheduleBeep(t + 0.46)
+    }
+
+    async function start() {
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume() } catch {}
+      }
+      if (ctx.state === 'running') {
+        setNeedsTap(false)
+        playPattern()
+        beepIntervalRef.current = setInterval(playPattern, 1200)
+      } else {
+        // iOS blocked audio — show tap-to-activate overlay
+        setNeedsTap(true)
+        beepIntervalRef.current = setInterval(playPattern, 1200)
+      }
+    }
+
+    start()
+
+    // Resume on first gesture (iOS requires user interaction for audio)
+    function resumeOnGesture() {
+      if (audioCtxRef.current?.state === 'suspended') {
+        audioCtxRef.current.resume().then(() => {
+          setNeedsTap(false)
+          playPattern()
+        })
+      }
+    }
+    document.addEventListener('touchstart', resumeOnGesture, { once: true })
+    document.addEventListener('click', resumeOnGesture, { once: true })
 
     return () => {
       if (beepIntervalRef.current) clearInterval(beepIntervalRef.current)
+      document.removeEventListener('touchstart', resumeOnGesture)
+      document.removeEventListener('click', resumeOnGesture)
       ctx.close()
     }
   }, [])
@@ -122,6 +159,20 @@ export default function AlarmDismissClient({ userId, requireQr = false }: { user
 
   return (
     <div className="fixed inset-0 flex flex-col" style={{ background: '#080808' }}>
+      {/* iOS audio unlock overlay */}
+      {needsTap && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4"
+          style={{ background: 'rgba(0,0,0,0.85)' }}
+          onClick={() => setNeedsTap(false)}
+        >
+          <div className="text-5xl font-black" style={{ color: '#f87171' }}>ALARM</div>
+          <div className="text-lg font-semibold" style={{ color: 'var(--text-2)' }}>Tap anywhere to activate</div>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center animate-pulse" style={{ background: 'rgba(248,113,113,0.2)', border: '2px solid #f87171' }}>
+            <span style={{ color: '#f87171', fontSize: 28 }}>▶</span>
+          </div>
+        </div>
+      )}
       {/* Top */}
       <div className="flex flex-col items-center pt-16 pb-6">
         <div className="text-5xl font-black tracking-tight mb-2" style={{ color: '#f87171' }}>ALARM</div>
