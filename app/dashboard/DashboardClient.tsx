@@ -9,7 +9,7 @@ import TaskTimer, { extractSeconds } from '@/app/components/TaskTimer'
 import { Snowflake } from 'lucide-react'
 import { getAchievementsToAward, ACHIEVEMENTS } from '@/lib/achievements'
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics'
-import { scheduleTaskReminder, cancelNotification } from '@/lib/notifications'
+import { scheduleTaskReminder, cancelNotification, requestNotificationPermission } from '@/lib/notifications'
 import { updateWidget } from '@/lib/widget'
 
 const TIER_LABELS = ['', 'Iron', 'Steel', 'Bronze', 'Gold']
@@ -104,9 +104,10 @@ export default function DashboardClient({
   const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
   const allDone = completedCount === totalCount && totalCount > 0
 
-  // Load UI prefs from localStorage and push initial widget data
+  // Load UI prefs from localStorage, request notification permission, push initial widget data
   useEffect(() => {
     setShowProgressWidget(localStorage.getItem('showProgressWidget') === 'true')
+    requestNotificationPermission().catch(() => {})
     updateWidget(
       initialTasks.filter(t => t.completed).length,
       initialTasks.length
@@ -125,7 +126,8 @@ export default function DashboardClient({
     const [rh, rm] = timeStr.split(':').map(Number)
     const remindAt = new Date()
     remindAt.setHours(rh, rm, 0, 0)
-    if (remindAt <= new Date()) return
+    // If the time has already passed today, schedule for tomorrow
+    if (remindAt <= new Date()) remindAt.setDate(remindAt.getDate() + 1)
     scheduleTaskReminder(totalCount - completedCount, remindAt).catch(() => {})
   }, [completedCount, totalCount])
 
