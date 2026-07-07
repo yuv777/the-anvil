@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase-server'
 import { format } from 'date-fns'
 import SquadDetailClient from './SquadDetailClient'
 
@@ -20,12 +20,14 @@ export default async function SquadPage({ params }: { params: Promise<{ id: stri
   const memberIds = members.map((m: any) => m.user_id)
   const today = format(new Date(), 'yyyy-MM-dd')
 
+  const admin = createAdminSupabaseClient()
+
   const [profilesResult, streaksResult, challengesResult] = await Promise.all([
     memberIds.length > 0
-      ? supabase.from('profiles').select('id, username').in('id', memberIds)
+      ? admin.from('profiles').select('id, username').in('id', memberIds)
       : Promise.resolve({ data: [] }),
     memberIds.length > 0
-      ? supabase.from('user_streaks').select('user_id, current_streak, longest_streak, last_completion_date').in('user_id', memberIds)
+      ? admin.from('user_streaks').select('user_id, current_streak, longest_streak, last_completion_date').in('user_id', memberIds)
       : Promise.resolve({ data: [] }),
     supabase.from('squad_challenges').select('*').eq('squad_id', id).order('created_at'),
   ])
